@@ -1,11 +1,40 @@
 "use client";
 
-import { Briefcase, Eye, EyeOff } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
+import { Briefcase, Eye, EyeOff, Loader2 } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { ApiError } from "@/lib/api";
 
 export default function LoginPage() {
+  const { login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      await login(email, password);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const data = err.data as
+          | { message?: string; errors?: Record<string, string[]> }
+          | undefined;
+        const firstFieldError = data?.errors
+          ? Object.values(data.errors)[0]?.[0]
+          : undefined;
+        setError(firstFieldError || data?.message || err.message);
+      } else {
+        setError("ไม่สามารถเชื่อมต่อระบบได้");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -71,13 +100,21 @@ export default function LoginPage() {
               กรุณากรอกข้อมูลเพื่อเข้าใช้งาน
             </p>
 
-            <form className="space-y-5">
+            <form className="space-y-5" onSubmit={onSubmit}>
+              {error && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
                   อีเมล
                 </label>
                 <input
                   type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="example@company.com"
                   className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all placeholder:text-muted"
                 />
@@ -90,6 +127,9 @@ export default function LoginPage() {
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all placeholder:text-muted pr-12"
                   />
@@ -107,29 +147,55 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded border-border text-primary-500 focus:ring-primary-500"
-                  />
-                  <span className="text-sm text-muted">จดจำฉัน</span>
-                </label>
-                <a
-                  href="#"
-                  className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-                >
-                  ลืมรหัสผ่าน?
-                </a>
-              </div>
-
-              <Link
-                href="/dashboard"
-                className="block w-full bg-gradient-to-r from-primary-500 to-accent-500 text-white py-3 rounded-xl text-sm font-semibold hover:from-primary-600 hover:to-accent-600 transition-all shadow-lg shadow-primary-500/25 text-center"
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-primary-500 to-accent-500 text-white py-3 rounded-xl text-sm font-semibold hover:from-primary-600 hover:to-accent-600 transition-all shadow-lg shadow-primary-500/25 disabled:opacity-60 disabled:cursor-not-allowed"
               >
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 เข้าสู่ระบบ
-              </Link>
+              </button>
             </form>
+
+            {/* Demo accounts */}
+            <div className="mt-6 pt-5 border-t border-border">
+              <p className="text-xs font-medium text-muted mb-2">บัญชีทดสอบ (คลิกเพื่อกรอก)</p>
+              <div className="space-y-1.5">
+                {[
+                  {
+                    label: "Super Admin",
+                    email: "superadmin@cyc-hrm.local",
+                    color: "bg-amber-50 text-amber-700 border-amber-200",
+                  },
+                  {
+                    label: "Admin",
+                    email: "admin@cyc-hrm.local",
+                    color: "bg-primary-50 text-primary-700 border-primary-200",
+                  },
+                  {
+                    label: "Member",
+                    email: "member@cyc-hrm.local",
+                    color: "bg-blue-50 text-blue-700 border-blue-200",
+                  },
+                ].map((acc) => (
+                  <button
+                    key={acc.email}
+                    type="button"
+                    onClick={() => {
+                      setEmail(acc.email);
+                      setPassword("password");
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs transition hover:opacity-90 ${acc.color}`}
+                  >
+                    <span className="font-semibold">{acc.label}</span>
+                    <span className="font-mono">{acc.email}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted mt-2">
+                รหัสผ่านทุกบัญชี: <span className="font-mono font-semibold">password</span>
+              </p>
+            </div>
           </div>
 
           <p className="text-center text-xs text-muted mt-6">
