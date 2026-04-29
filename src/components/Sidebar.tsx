@@ -42,10 +42,6 @@ const menuItems: MenuItem[] = [
     href: "/employees",
     icon: Users,
     permission: "employees.view",
-    children: [
-      { label: "รายชื่อพนักงาน", href: "/employees", permission: "employees.view" },
-      { label: "เพิ่มพนักงาน", href: "/employees/create", permission: "employees.create" },
-    ],
   },
   {
     label: "กำหนดกฎระเบียบ",

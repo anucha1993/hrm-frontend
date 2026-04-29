@@ -3,7 +3,7 @@
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
 import Link from "next/link";
-import { Plus, Search, Edit2, Trash2, Eye, Loader2 } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -185,26 +185,26 @@ export default function EmployeesPage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1">
-                              <Link
-                                href={`/employees/${e.id}/edit`}
-                                className="p-1.5 rounded-lg hover:bg-surface text-muted"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Link>
-                              {canUpdate && (
+                              {canUpdate ? (
                                 <Link
                                   href={`/employees/${e.id}/edit`}
-                                  className="p-1.5 rounded-lg hover:bg-primary-50 text-primary-500"
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-primary-50 text-primary-600 text-xs font-medium"
+                                  title="แก้ไขข้อมูล"
                                 >
-                                  <Edit2 className="w-4 h-4" />
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                  แก้ไข
                                 </Link>
+                              ) : (
+                                <span className="text-xs text-muted px-2">-</span>
                               )}
                               {canDelete && (
                                 <button
                                   onClick={() => remove(e)}
-                                  className="p-1.5 rounded-lg hover:bg-accent-50 text-accent-500"
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent-50 text-accent-600 text-xs font-medium"
+                                  title="ลบ"
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  ลบ
                                 </button>
                               )}
                             </div>

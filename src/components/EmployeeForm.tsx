@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Trash2, Upload, FileIcon, Database } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Upload, FileIcon, Database, X } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
 import LabourImportModal from "@/components/LabourImportModal";
@@ -504,20 +504,51 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
 
             <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-border text-sm text-muted cursor-pointer hover:bg-surface">
               <Upload className="w-4 h-4" />
-              คลิกเพื่อเลือกไฟล์เอกสาร (อัปโหลดได้หลายไฟล์, สูงสุด 10MB)
+              คลิกเพื่อเลือกไฟล์เอกสาร (อัปโหลดได้หลายไฟล์, สูงสุด 10MB ต่อไฟล์)
               <input
                 type="file"
                 multiple
                 className="hidden"
-                onChange={(e) => setNewFiles(Array.from(e.target.files ?? []))}
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files ?? []);
+                  // ตรวจขนาดฝั่ง client (10MB)
+                  const tooBig = picked.find((f) => f.size > 10 * 1024 * 1024);
+                  if (tooBig) {
+                    setError(`ไฟล์ "${tooBig.name}" ขนาดเกิน 10MB`);
+                    e.target.value = "";
+                    return;
+                  }
+                  // เพิ่มเข้า list (ไม่ทับ) และกันชื่อซ้ำ
+                  setNewFiles((prev) => {
+                    const names = new Set(prev.map((f) => f.name));
+                    return [...prev, ...picked.filter((f) => !names.has(f.name))];
+                  });
+                  e.target.value = ""; // reset เพื่อให้เลือกไฟล์เดิมได้อีก
+                }}
               />
             </label>
             {newFiles.length > 0 && (
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {newFiles.map((f, i) => (
-                  <li key={i} className="text-xs text-foreground flex items-center gap-2">
-                    <FileIcon className="w-3 h-3 text-muted" />
-                    {f.name} <span className="text-muted">({(f.size / 1024).toFixed(0)} KB)</span>
+                  <li
+                    key={`${f.name}-${i}`}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-50 border border-primary-200 text-sm"
+                  >
+                    <FileIcon className="w-4 h-4 text-primary-600 shrink-0" />
+                    <span className="flex-1 truncate text-foreground">{f.name}</span>
+                    <span className="text-xs text-muted shrink-0">
+                      {f.size < 1024 * 1024
+                        ? `${(f.size / 1024).toFixed(0)} KB`
+                        : `${(f.size / 1024 / 1024).toFixed(1)} MB`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setNewFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="p-1 rounded hover:bg-red-100 text-red-500 shrink-0"
+                      title="ลบไฟล์นี้ออก"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -665,11 +696,13 @@ function Field({
   full?: boolean;
 }) {
   return (
-    <div className={`grid grid-cols-12 items-center gap-3 ${full ? "md:col-span-2" : ""}`}>
-      <label className="col-span-4 text-sm text-muted text-right leading-tight">
+    <div className={`grid grid-cols-12 items-start gap-3 ${full ? "md:col-span-2" : ""}`}>
+      <label
+        className={`${full ? "col-span-2" : "col-span-4"} text-sm text-muted text-right leading-tight pt-2`}
+      >
         {label} {required && <span className="text-accent-500">*</span>}
       </label>
-      <div className="col-span-8">{children}</div>
+      <div className={full ? "col-span-10" : "col-span-8"}>{children}</div>
     </div>
   );
 }
