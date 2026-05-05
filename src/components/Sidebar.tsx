@@ -59,10 +59,11 @@ const menuItems: MenuItem[] = [
     label: "ลงเวลางาน",
     href: "/attendance",
     icon: Clock,
-    permission: "attendance.view",
+    permission: ["attendance.checkin", "attendance.view"],
     children: [
-      { label: "บันทึกเวลา", href: "/attendance", permission: "attendance.view" },
-      { label: "ประวัติเวลา", href: "/attendance/history", permission: "attendance.view" },
+      { label: "บันทึกเวลา", href: "/attendance", permission: "attendance.checkin" },
+      { label: "ประวัติของฉัน", href: "/attendance/history", permission: "attendance.checkin" },
+      { label: "ประวัติทั้งหมด", href: "/attendance/manage", permission: "attendance.view" },
     ],
   },
   {
@@ -115,13 +116,15 @@ const menuItems: MenuItem[] = [
       { label: "จัดการแผนก", href: "/settings/departments", permission: "master_data.manage" },
       { label: "ประเทศ", href: "/settings/countries", permission: "master_data.manage" },
       { label: "ประเภทการจ้าง", href: "/settings/employment-types", permission: "master_data.manage" },
+      { label: "สถานที่ทำงาน", href: "/settings/locations", permission: "attendance.manage" },
+      { label: "กะการทำงาน", href: "/settings/shifts", permission: "attendance.manage" },
     ],
   },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, hasPermission, logout } = useAuth();
+  const { user, hasPermission, hasRole, logout } = useAuth();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const toggleExpand = (label: string) => {
@@ -136,8 +139,12 @@ export default function Sidebar() {
 
   const can = (perm?: string | string[]) => !perm || hasPermission(perm);
 
+  // Employee role: จำกัดให้เห็นเฉพาะเมนู "ลงเวลางาน"
+  const isEmployeeOnly = hasRole("employee") && !hasRole(["super_admin", "admin", "member"]);
+
   const visibleItems = menuItems
     .map((item) => {
+      if (isEmployeeOnly && item.href !== "/attendance") return null;
       if (item.children) {
         const visibleChildren = item.children.filter((c) => can(c.permission));
         if (visibleChildren.length === 0 && !can(item.permission)) return null;

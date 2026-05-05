@@ -440,6 +440,32 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
           </Field>
         </Section>
 
+        <Section title="บัญชีผู้ใช้ระบบ (สำหรับลงเวลา)">
+          <div className="md:col-span-2">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm space-y-2">
+              <p className="font-medium text-blue-900">ระบบจะสร้างบัญชี login ให้พนักงานอัตโนมัติ</p>
+              <ul className="list-disc list-inside text-blue-800 space-y-1">
+                <li>
+                  <strong>Username:</strong> รหัสพนักงาน{" "}
+                  <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200">
+                    {form.employee_code || "—"}
+                  </span>
+                </li>
+                <li>
+                  <strong>Password:</strong> เลขบัตรประชาชน / พาสปอร์ต{" "}
+                  <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200">
+                    {form.national_id ? "•".repeat(Math.min(form.national_id.length, 13)) : "—"}
+                  </span>
+                </li>
+                <li>Role: <strong>Employee</strong> (สิทธิ์ลงเวลาเข้า–ออกงาน)</li>
+              </ul>
+              <p className="text-xs text-blue-700 pt-1 border-t border-blue-200">
+                * เมื่อแก้ไขรหัสพนักงานหรือเลข ปปช./พาสปอร์ต ระบบจะอัปเดตบัญชี login ให้อัตโนมัติ
+              </p>
+            </div>
+          </div>
+        </Section>
+
         <Section title="ผู้ติดต่อกรณีฉุกเฉิน">
           <Field label="ชื่อ">
             <input

@@ -26,6 +26,10 @@ const emptyForm: UserForm = {
   is_active: true,
 };
 
+type RoleTab = "system" | "employee";
+const SYSTEM_ROLES = ["super_admin", "admin", "member"];
+const EMPLOYEE_ROLES = ["employee"];
+
 export default function UsersPage() {
   const { hasPermission } = useAuth();
   const canCreate = hasPermission("users.create");
@@ -36,6 +40,7 @@ export default function UsersPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<RoleTab>("system");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -63,18 +68,31 @@ export default function UsersPage() {
     load();
   }, [load]);
 
+  const tabRoles = tab === "system" ? SYSTEM_ROLES : EMPLOYEE_ROLES;
+
+  const visibleUsers = useMemo(
+    () => users.filter((u) => u.role && tabRoles.includes(u.role.name)),
+    [users, tabRoles]
+  );
+
+  const tabRoleObjects = useMemo(
+    () => roles.filter((r) => tabRoles.includes(r.name)),
+    [roles, tabRoles]
+  );
+
   const stats = useMemo(() => {
-    const total = users.length;
-    const byRole = users.reduce<Record<string, number>>((acc, u) => {
+    const total = visibleUsers.length;
+    const byRole = visibleUsers.reduce<Record<string, number>>((acc, u) => {
       const k = u.role?.display_name ?? "ไม่ระบุ";
       acc[k] = (acc[k] ?? 0) + 1;
       return acc;
     }, {});
     return { total, byRole };
-  }, [users]);
+  }, [visibleUsers]);
 
   function openCreate() {
-    setForm({ ...emptyForm, role_id: roles[0]?.id ?? "" });
+    const defaultRole = tabRoleObjects[0]?.id ?? "";
+    setForm({ ...emptyForm, role_id: defaultRole });
     setError(null);
     setShowModal(true);
   }
@@ -156,9 +174,25 @@ export default function UsersPage() {
               onClick={openCreate}
               className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold"
             >
-              <Plus className="w-4 h-4" /> เพิ่มผู้ใช้งาน
+              <Plus className="w-4 h-4" /> {tab === "system" ? "เพิ่มผู้ใช้งาน" : "เพิ่มบัญชีพนักงาน"}
             </button>
           )}
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-xl border border-border inline-flex p-1">
+          <button
+            onClick={() => setTab("system")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${tab === "system" ? "bg-primary-500 text-white shadow" : "text-muted hover:text-foreground"}`}
+          >
+            ผู้ใช้งานระบบ (Super Admin / Admin / Member)
+          </button>
+          <button
+            onClick={() => setTab("employee")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${tab === "employee" ? "bg-primary-500 text-white shadow" : "text-muted hover:text-foreground"}`}
+          >
+            บัญชีพนักงาน (Employee)
+          </button>
         </div>
 
         {/* Stats */}
@@ -212,14 +246,14 @@ export default function UsersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {users.length === 0 ? (
+                  {visibleUsers.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted">
                         ไม่พบข้อมูลผู้ใช้
                       </td>
                     </tr>
                   ) : (
-                    users.map((u) => (
+                    visibleUsers.map((u) => (
                       <tr key={u.id} className="hover:bg-surface/50">
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-3">
@@ -341,7 +375,7 @@ export default function UsersPage() {
                   className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-white"
                 >
                   <option value="">— เลือกบทบาท —</option>
-                  {roles.map((r) => (
+                  {tabRoleObjects.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.display_name}
                     </option>

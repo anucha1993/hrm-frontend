@@ -102,6 +102,8 @@ export type Employee = {
   emergency_contact_phone?: string | null;
   status: EmployeeStatus;
   note?: string | null;
+  user_id?: number | null;
+  user?: { id: number; name: string; email: string } | null;
   department?: Department | null;
   country?: Country | null;
   employment_type?: EmploymentType | null;
@@ -187,4 +189,64 @@ export type LabourListResponse = {
     prev?: string | null;
     next?: string | null;
   };
+};
+
+// ---- Attendance ----
+export type OfficeLocation = {
+  id: number;
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+  radius_m: number;
+  enforce_geofence: boolean;
+  address: string | null;
+  is_active: boolean;
+};
+
+export type WorkShift = {
+  id: number;
+  name: string;
+  start_time: string; // HH:mm:ss
+  end_time: string;
+  break_minutes: number;
+  late_grace_minutes: number;
+  cross_midnight: boolean;
+  is_active: boolean;
+};
+
+export type Attendance = {
+  id: number;
+  employee_id: number;
+  type: "check_in" | "check_out";
+  checked_at: string;
+  latitude: number | null;
+  longitude: number | null;
+  accuracy_m: number | null;
+  office_location_id: number | null;
+  office_location?: OfficeLocation | null;
+  distance_m: number | null;
+  outside_geofence: boolean;
+  work_shift_id: number | null;
+  work_shift?: WorkShift | null;
+  status: "normal" | "late" | "early_leave" | "overtime";
+  late_minutes: number | null;
+  photo_path: string | null;
+  photo_url: string | null;
+  note: string | null;
+  created_at: string;
+  employee?: {
+    id: number;
+    employee_code: string;
+    first_name: string;
+    last_name: string;
+  };
+};
+
+export type TodayStatus = {
+  has_employee: boolean;
+  employee?: { id: number; employee_code: string; first_name: string; last_name: string };
+  last_check_in: Attendance | null;
+  last_check_out: Attendance | null;
+  shift: WorkShift | null;
+  office_locations?: OfficeLocation[];
 };

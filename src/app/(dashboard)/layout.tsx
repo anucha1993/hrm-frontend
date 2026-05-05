@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import { useAuth } from "@/lib/auth-context";
@@ -13,12 +13,18 @@ export default function DashboardLayout({
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/login");
+      return;
     }
-  }, [loading, user, router]);
+    // Employee role → บังคับให้อยู่ในเมนูลงเวลางานเท่านั้น
+    if (!loading && user && user.role?.name === "employee" && !pathname.startsWith("/attendance")) {
+      router.replace("/attendance");
+    }
+  }, [loading, user, router, pathname]);
 
   if (loading || !user) {
     return (

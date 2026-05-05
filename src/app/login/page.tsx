@@ -108,14 +108,14 @@ export default function LoginPage() {
               )}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
-                  อีเมล
+                  อีเมล / รหัสพนักงาน
                 </label>
                 <input
-                  type="email"
+                  type="text"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="example@company.com"
+                  placeholder="example@company.com หรือ EMP001"
                   className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all placeholder:text-muted"
                 />
               </div>

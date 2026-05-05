@@ -1,239 +1,412 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
-import StatCard from "@/components/StatCard";
-import { Clock, LogIn, LogOut, Calendar, Users, AlertTriangle, Camera, Fingerprint, MapPin, Wifi, WifiOff, CheckCircle, XCircle } from "lucide-react";
+import { apiFetch, ApiError } from "@/lib/api";
+import { TodayStatus, OfficeLocation, Attendance } from "@/lib/types";
+import { Camera, LogIn, LogOut, MapPin, Clock, RefreshCw, AlertTriangle, CheckCircle, X } from "lucide-react";
 
-type SystemTab = "selfie" | "fingerprint";
+type GeoPos = {
+  lat: number;
+  lng: number;
+  accuracy: number;
+};
 
-const todayRecords = [
-  { name: "สมชาย ใจดี", dept: "ฝ่ายผลิต", checkIn: "07:55", checkOut: "17:05", status: "ตรงเวลา", badge: "success" as const, hours: "8:10", method: "selfie" as const, hasPhoto: true, location: "โรงงาน A" },
-  { name: "สมหญิง รักงาน", dept: "ฝ่ายบัญชี", checkIn: "08:02", checkOut: "17:00", status: "ตรงเวลา", badge: "success" as const, hours: "7:58", method: "fingerprint" as const, hasPhoto: false, device: "FP-001" },
-  { name: "ประยุทธ์ มั่นคง", dept: "ฝ่ายขาย", checkIn: "08:32", checkOut: "-", status: "สาย", badge: "warning" as const, hours: "-", method: "selfie" as const, hasPhoto: true, location: "สำนักงาน" },
-  { name: "วิภา สดใส", dept: "ฝ่ายบุคคล", checkIn: "07:50", checkOut: "17:10", status: "ตรงเวลา", badge: "success" as const, hours: "8:20", method: "fingerprint" as const, hasPhoto: false, device: "FP-002" },
-  { name: "สุภาพ ดีเลิศ", dept: "ฝ่ายผลิต", checkIn: "-", checkOut: "-", status: "ขาด", badge: "danger" as const, hours: "-", method: "-" as const, hasPhoto: false },
-  { name: "มนัส ทำดี", dept: "ฝ่ายไอที", checkIn: "08:00", checkOut: "-", status: "ตรงเวลา", badge: "success" as const, hours: "-", method: "selfie" as const, hasPhoto: true, location: "สำนักงาน" },
-  { name: "นภา สวยงาม", dept: "ฝ่ายการตลาด", checkIn: "-", checkOut: "-", status: "ลา", badge: "info" as const, hours: "-", method: "-" as const, hasPhoto: false },
-  { name: "ชัยวุฒิ แกร่ง", dept: "ฝ่ายผลิต", checkIn: "08:45", checkOut: "-", status: "สาย", badge: "warning" as const, hours: "-", method: "fingerprint" as const, hasPhoto: false, device: "FP-001" },
-];
+function statusBadge(s: Attendance["status"]) {
+  const map: Record<Attendance["status"], { label: string; variant: "success" | "warning" | "danger" | "info" }> = {
+    normal: { label: "ปกติ", variant: "success" },
+    late: { label: "สาย", variant: "warning" },
+    early_leave: { label: "ออกก่อน", variant: "warning" },
+    overtime: { label: "ทำงานล่วงเวลา", variant: "info" },
+  };
+  return map[s] || map.normal;
+}
 
-const fpDevices = [
-  { id: "FP-001", name: "เครื่องสแกนนิ้วมือ #1", location: "อาคารโรงงาน A - ชั้น 1", status: "online", lastSync: "09:15", registered: 85, todayScans: 62 },
-  { id: "FP-002", name: "เครื่องสแกนนิ้วมือ #2", location: "อาคารสำนักงาน - ชั้น 1", status: "online", lastSync: "09:14", registered: 72, todayScans: 48 },
-  { id: "FP-003", name: "เครื่องสแกนนิ้วมือ #3", location: "อาคารคลังสินค้า", status: "offline", lastSync: "08:30", registered: 30, todayScans: 0 },
-];
+function fmtTime(iso?: string | null) {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
 
-export default function AttendancePage() {
-  const [activeTab, setActiveTab] = useState<SystemTab>("selfie");
+function fmtDateThai(d: Date) {
+  return d.toLocaleDateString("th-TH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+}
+
+function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371000;
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function nearestOffice(pos: GeoPos | null, offices: OfficeLocation[]): { office: OfficeLocation; distance: number } | null {
+  if (!pos || offices.length === 0) return null;
+  let best: { office: OfficeLocation; distance: number } | null = null;
+  for (const o of offices) {
+    if (o.latitude == null || o.longitude == null) continue;
+    const d = haversine(pos.lat, pos.lng, +o.latitude, +o.longitude);
+    if (!best || d < best.distance) best = { office: o, distance: d };
+  }
+  return best;
+}
+
+export default function AttendanceCheckInPage() {
+  const [today, setToday] = useState<TodayStatus | null>(null);
+  const [now, setNow] = useState(new Date());
+  const [pos, setPos] = useState<GeoPos | null>(null);
+  const [posError, setPosError] = useState<string | null>(null);
+  const [geoNonce, setGeoNonce] = useState(0);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [pendingType, setPendingType] = useState<"check_in" | "check_out" | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [note, setNote] = useState("");
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const loadToday = useCallback(async () => {
+    try {
+      const data = await apiFetch<TodayStatus>("/attendance/today");
+      setToday(data);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadToday();
+  }, [loadToday]);
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setPosError("เบราว์เซอร์ไม่รองรับ GPS");
+      return;
+    }
+    const id = navigator.geolocation.watchPosition(
+      (p) => {
+        setPos({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy });
+        setPosError(null);
+      },
+      (err) => {
+        let msg = "ดึงตำแหน่งไม่สำเร็จ: " + err.message;
+        if (err.code === err.PERMISSION_DENIED) {
+          msg = "ผู้ใช้ปฏิเสธการเข้าถึงตำแหน่ง — โปรดอนุญาต Location ที่ไอคอน 🔒/ⓘ ข้างซ้าย URL bar แล้วรีเฟรชหน้านี้";
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          msg = "ไม่สามารถระบุตำแหน่งได้ — ลองเปิด GPS/Wi-Fi แล้วลองใหม่";
+        } else if (err.code === err.TIMEOUT) {
+          msg = "หาตำแหน่งนานเกินไป — กรุณาลองใหม่อีกครั้ง";
+        }
+        setPosError(msg);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, [geoNonce]);
+
+  async function startCamera(type: "check_in" | "check_out") {
+    setResult(null);
+    setPendingType(type);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1280 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraOn(true);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 50);
+    } catch (e) {
+      setResult({ ok: false, msg: "เข้าถึงกล้องไม่ได้: " + (e instanceof Error ? e.message : "ไม่ทราบสาเหตุ") });
+      setPendingType(null);
+    }
+  }
+
+  function stopCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setCameraOn(false);
+    setPendingType(null);
+    setNote("");
+  }
+
+  function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number, p: GeoPos, offices: OfficeLocation[]) {
+    const near = nearestOffice(p, offices);
+    const dt = new Date();
+    const lines = [
+      dt.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "medium" }),
+      `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}  (±${p.accuracy.toFixed(0)}m)`,
+      near ? `${near.office.name} • ห่าง ${near.distance.toFixed(0)} ม.` : "ไม่พบสถานที่ใกล้เคียง",
+      near?.office.address || "",
+    ].filter(Boolean) as string[];
+
+    const padding = Math.round(w * 0.02);
+    const fontSize = Math.max(14, Math.round(w * 0.025));
+    ctx.font = `${fontSize}px sans-serif`;
+    const lineH = fontSize * 1.4;
+    const boxH = lineH * lines.length + padding * 1.2;
+    const boxW = w - padding * 2;
+    const x = padding;
+    const y = h - boxH - padding;
+
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(x, y, boxW, boxH);
+
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "top";
+    lines.forEach((l, i) => {
+      ctx.fillText(l, x + padding * 0.6, y + padding * 0.6 + i * lineH);
+    });
+
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.textAlign = "right";
+    ctx.fillText("CYC-HRM", w - padding, padding);
+    ctx.textAlign = "left";
+  }
+
+  async function capture() {
+    if (!videoRef.current || !pendingType) return;
+    if (!pos) {
+      setResult({ ok: false, msg: "ยังไม่ได้ตำแหน่ง GPS โปรดรอสักครู่" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const video = videoRef.current;
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d")!;
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, w, h);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      drawWatermark(ctx, w, h, pos, today?.office_locations || []);
+
+      const blob: Blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", 0.9);
+      });
+
+      const fd = new FormData();
+      fd.append("type", pendingType);
+      fd.append("latitude", pos.lat.toString());
+      fd.append("longitude", pos.lng.toString());
+      fd.append("accuracy_m", pos.accuracy.toFixed(1));
+      fd.append("photo", blob, `selfie-${Date.now()}.jpg`);
+      if (note.trim()) fd.append("note", note.trim());
+
+      const res = await apiFetch<{ message: string; data: Attendance }>("/attendance/check-in", {
+        method: "POST",
+        body: fd,
+      });
+      setResult({ ok: true, msg: res.message });
+      stopCamera();
+      await loadToday();
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
+      setResult({ ok: false, msg });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const lastIn = today?.last_check_in;
+  const lastOut = today?.last_check_out;
+  const canCheckIn = !lastIn || (!!lastOut && new Date(lastOut.checked_at) > new Date(lastIn.checked_at));
+  const canCheckOut = !!lastIn && (!lastOut || new Date(lastIn.checked_at) > new Date(lastOut.checked_at));
+
+  const near = nearestOffice(pos, today?.office_locations || []);
+  const insideGeofence = near ? (!near.office.enforce_geofence || near.distance <= near.office.radius_m) : false;
 
   return (
     <>
-      <Topbar title="ลงเวลางาน" />
-      <div className="p-6 space-y-6">
-        {/* Header with Date & Clock */}
+      <Topbar title="ลงเวลาเข้า-ออก" />
+      <div className="p-6 space-y-6 max-w-5xl mx-auto">
         <div className="bg-gradient-to-r from-primary-500 to-accent-500 rounded-2xl p-6 text-white">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <p className="text-white/70 text-sm">วันนี้</p>
-              <h3 className="text-2xl font-bold mt-1">20 เมษายน 2026</h3>
-              <p className="text-white/80 mt-1">วันจันทร์</p>
+              <h3 className="text-xl font-bold mt-1">{fmtDateThai(now)}</h3>
+              {today?.employee && (
+                <p className="text-white/80 text-sm mt-1">
+                  {today.employee.first_name} {today.employee.last_name} • {today.employee.employee_code}
+                </p>
+              )}
             </div>
             <div className="text-center">
               <div className="text-4xl font-bold font-mono">
-                {new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+                {now.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
               </div>
               <p className="text-sm text-white/60 mt-1">เวลาปัจจุบัน</p>
             </div>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard title="มาตรงเวลา" value={128} icon={<Clock className="w-5 h-5" />} color="green" change="82% ของทั้งหมด" changeType="up" />
-          <StatCard title="มาสาย" value={14} icon={<AlertTriangle className="w-5 h-5" />} color="orange" change="9% ของทั้งหมด" changeType="down" />
-          <StatCard title="ขาดงาน" value={8} icon={<Users className="w-5 h-5" />} color="red" change="5% ของทั้งหมด" changeType="down" />
-          <StatCard title="ลางาน" value={6} icon={<Calendar className="w-5 h-5" />} color="blue" change="4% ของทั้งหมด" changeType="neutral" />
+        {today && !today.has_employee && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-xl p-4 text-sm">
+            บัญชีของคุณยังไม่ได้เชื่อมกับข้อมูลพนักงาน กรุณาติดต่อผู้ดูแลระบบ
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl border border-border p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <LogIn className="w-4 h-4 text-green-600" />
+              <span className="text-sm font-semibold">เวลาเข้าล่าสุด</span>
+            </div>
+            <div className="text-2xl font-mono">{fmtTime(lastIn?.checked_at)}</div>
+            {lastIn && <div className="mt-2"><Badge label={statusBadge(lastIn.status).label} variant={statusBadge(lastIn.status).variant} /></div>}
+          </div>
+          <div className="bg-white rounded-xl border border-border p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <LogOut className="w-4 h-4 text-red-500" />
+              <span className="text-sm font-semibold">เวลาออกล่าสุด</span>
+            </div>
+            <div className="text-2xl font-mono">{fmtTime(lastOut?.checked_at)}</div>
+            {lastOut && <div className="mt-2"><Badge label={statusBadge(lastOut.status).label} variant={statusBadge(lastOut.status).variant} /></div>}
+          </div>
+          <div className="bg-white rounded-xl border border-border p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="w-4 h-4 text-primary-600" />
+              <span className="text-sm font-semibold">กะวันนี้</span>
+            </div>
+            {today?.shift ? (
+              <>
+                <div className="text-base font-medium">{today.shift.name}</div>
+                <div className="text-sm text-muted font-mono">
+                  {today.shift.start_time.substring(0, 5)} - {today.shift.end_time.substring(0, 5)}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-muted">ไม่ได้กำหนดกะ</div>
+            )}
+          </div>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="bg-white rounded-xl border border-border">
-          <div className="flex border-b border-border">
-            <button
-              onClick={() => setActiveTab("selfie")}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold transition border-b-2 ${activeTab === "selfie" ? "border-primary-500 text-primary-600 bg-primary-50/50" : "border-transparent text-muted hover:text-foreground hover:bg-surface"}`}
-            >
-              <Camera className="w-4 h-4" /> เซลฟี่ Temptime
-            </button>
-            <button
-              onClick={() => setActiveTab("fingerprint")}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold transition border-b-2 ${activeTab === "fingerprint" ? "border-primary-500 text-primary-600 bg-primary-50/50" : "border-transparent text-muted hover:text-foreground hover:bg-surface"}`}
-            >
-              <Fingerprint className="w-4 h-4" /> สแกนนิ้วมือ
-            </button>
-          </div>
-
-          {/* ===================== SELFIE TAB ===================== */}
-          {activeTab === "selfie" && (
-            <div className="p-5 space-y-5">
-              {/* Action Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary-50">
-                    <Camera className="w-5 h-5 text-primary-600" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-foreground">ถ่ายเซลฟี่ลงเวลา</h4>
-                    <p className="text-xs text-muted">ระบบจะบันทึก GPS และเวลาจาก Server อัตโนมัติ</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <button className="flex items-center gap-2 px-5 py-2.5 bg-green-500 text-white rounded-xl font-semibold text-sm hover:bg-green-600 transition">
-                    <LogIn className="w-4 h-4" /> ถ่ายเซลฟี่เข้างาน
-                  </button>
-                  <button className="flex items-center gap-2 px-5 py-2.5 bg-accent-500 text-white rounded-xl font-semibold text-sm hover:bg-accent-600 transition">
-                    <LogOut className="w-4 h-4" /> ถ่ายเซลฟี่ออกงาน
+        <div className="bg-white rounded-xl border border-border p-4">
+          <div className="flex items-start gap-3">
+            <MapPin className="w-5 h-5 text-primary-600 mt-0.5" />
+            <div className="flex-1">
+              <div className="text-sm font-semibold mb-1">ตำแหน่งปัจจุบัน</div>
+              {posError ? (
+                <div className="text-sm text-red-600 space-y-2">
+                  <div>{posError}</div>
+                  <button
+                    onClick={() => { setPosError(null); setGeoNonce((n) => n + 1); }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-semibold hover:bg-primary-700"
+                  >
+                    <RefreshCw className="w-3 h-3" /> ลองใหม่
                   </button>
                 </div>
-              </div>
-
-              {/* Selfie Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-surface border-b border-border">
-                      {["พนักงาน", "แผนก", "ประเภท", "เวลา", "พิกัด GPS", "สถานะรูป", "สถานะ"].map((h) => (
-                        <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-muted uppercase">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {[
-                      { name: "สมชาย ใจดี", dept: "ฝ่ายผลิต", type: "เข้างาน", time: "07:55", gps: "13.7563°N, 100.5018°E", photoOk: true, status: "ตรงเวลา", badge: "success" as const },
-                      { name: "มนัส ทำดี", dept: "ฝ่ายไอที", type: "เข้างาน", time: "08:00", gps: "13.7580°N, 100.5025°E", photoOk: true, status: "ตรงเวลา", badge: "success" as const },
-                      { name: "ประยุทธ์ มั่นคง", dept: "ฝ่ายขาย", type: "เข้างาน", time: "08:32", gps: "13.7580°N, 100.5025°E", photoOk: true, status: "สาย", badge: "warning" as const },
-                      { name: "สมชาย ใจดี", dept: "ฝ่ายผลิต", type: "ออกงาน", time: "17:05", gps: "13.7563°N, 100.5018°E", photoOk: true, status: "ปกติ", badge: "success" as const },
-                      { name: "มนัส ทำดี", dept: "ฝ่ายไอที", type: "ออกงาน", time: "17:30", gps: "13.7580°N, 100.5025°E", photoOk: false, status: "รูปไม่ชัด", badge: "danger" as const },
-                    ].map((s, i) => (
-                      <tr key={i} className="hover:bg-surface/50">
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-accent-400 flex items-center justify-center text-white text-xs font-bold">{s.name[0]}</div>
-                            <span className="text-sm font-medium text-foreground">{s.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3 text-sm text-muted">{s.dept}</td>
-                        <td className="px-5 py-3">
-                          <Badge label={s.type} variant={s.type === "เข้างาน" ? "success" : "warning"} />
-                        </td>
-                        <td className="px-5 py-3 text-sm font-mono text-foreground">{s.time}</td>
-                        <td className="px-5 py-3">
-                          <span className="inline-flex items-center gap-1 text-xs text-muted">
-                            <MapPin className="w-3 h-3" /> {s.gps}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          {s.photoOk ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-green-600"><CheckCircle className="w-3.5 h-3.5" /> ผ่าน</span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-red-600"><XCircle className="w-3.5 h-3.5" /> ไม่ผ่าน</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3"><Badge label={s.status} variant={s.badge} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ===================== FINGERPRINT TAB ===================== */}
-          {activeTab === "fingerprint" && (
-            <div className="p-5 space-y-5">
-              {/* Device Status */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {fpDevices.map((d) => (
-                  <div key={d.id} className={`rounded-xl border p-4 ${d.status === "online" ? "border-green-200 bg-green-50/30" : "border-red-200 bg-red-50/30"}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Fingerprint className={`w-4 h-4 ${d.status === "online" ? "text-green-600" : "text-red-500"}`} />
-                        <span className="text-sm font-semibold text-foreground">{d.name}</span>
-                      </div>
-                      {d.status === "online" ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600"><Wifi className="w-3 h-3" /> ออนไลน์</span>
+              ) : pos ? (
+                <>
+                  <div className="text-sm font-mono text-muted">
+                    {pos.lat.toFixed(6)}, {pos.lng.toFixed(6)} (±{pos.accuracy.toFixed(0)} ม.)
+                  </div>
+                  {near ? (
+                    <div className="text-sm mt-1 flex flex-wrap items-center gap-2">
+                      <span>{near.office.name}</span>
+                      <span className="text-muted">ห่าง {near.distance.toFixed(0)} ม.</span>
+                      {insideGeofence ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs">
+                          <CheckCircle className="w-3 h-3" /> อยู่ในพื้นที่
+                        </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600"><WifiOff className="w-3 h-3" /> ออฟไลน์</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs">
+                          <AlertTriangle className="w-3 h-3" /> นอกพื้นที่
+                        </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted flex items-center gap-1 mb-2"><MapPin className="w-3 h-3" /> {d.location}</p>
-                    <div className="flex items-center gap-3 text-xs text-muted">
-                      <span>ลงทะเบียน <strong className="text-foreground">{d.registered}</strong></span>
-                      <span>สแกนวันนี้ <strong className="text-primary-600">{d.todayScans}</strong></span>
-                      <span>ซิงค์ <strong className="text-foreground">{d.lastSync}</strong></span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ) : (
+                    <div className="text-sm text-muted mt-1">ไม่พบสถานที่ใกล้เคียง</div>
+                  )}
+                </>
+              ) : (
+                <div className="text-sm text-muted flex items-center gap-2">
+                  <RefreshCw className="w-3 h-3 animate-spin" /> กำลังหาตำแหน่ง...
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
-              {/* Fingerprint Table */}
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-foreground">บันทึกสแกนนิ้วมือวันนี้</h4>
-                <button className="text-xs text-primary-600 font-medium hover:underline">ซิงค์ข้อมูลล่าสุด</button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-surface border-b border-border">
-                      {["สถานะ", "พนักงาน", "ประเภท", "เวลา", "เครื่อง", "ความตรงกัน"].map((h) => (
-                        <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-muted uppercase">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {[
-                      { name: "สมหญิง รักงาน", time: "08:02", type: "เข้างาน", device: "FP-001", match: 98, success: true },
-                      { name: "วิภา สดใส", time: "07:50", type: "เข้างาน", device: "FP-002", match: 95, success: true },
-                      { name: "ชัยวุฒิ แกร่ง", time: "08:45", type: "เข้างาน", device: "FP-001", match: 92, success: true },
-                      { name: "สมหญิง รักงาน", time: "17:00", type: "ออกงาน", device: "FP-001", match: 97, success: true },
-                      { name: "วิภา สดใส", time: "17:10", type: "ออกงาน", device: "FP-002", match: 94, success: true },
-                      { name: "ไม่ระบุตัวตน", time: "09:22", type: "-", device: "FP-001", match: 35, success: false },
-                    ].map((s, i) => (
-                      <tr key={i} className={`hover:bg-surface/50 ${!s.success ? "bg-red-50" : ""}`}>
-                        <td className="px-5 py-3">
-                          {s.success ? (
-                            <CheckCircle className="w-5 h-5 text-green-500" />
-                          ) : (
-                            <XCircle className="w-5 h-5 text-red-500" />
-                          )}
-                        </td>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${s.success ? "bg-gradient-to-br from-primary-400 to-accent-400" : "bg-red-400"}`}>{s.name[0]}</div>
-                            <span className={`text-sm font-medium ${s.success ? "text-foreground" : "text-red-600"}`}>{s.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3">
-                          {s.type !== "-" ? (
-                            <Badge label={s.type} variant={s.type === "เข้างาน" ? "success" : "warning"} />
-                          ) : (
-                            <Badge label="สแกนไม่สำเร็จ" variant="danger" />
-                          )}
-                        </td>
-                        <td className="px-5 py-3 text-sm font-mono text-foreground">{s.time}</td>
-                        <td className="px-5 py-3 text-sm text-muted">{s.device}</td>
-                        <td className="px-5 py-3">
-                          <span className={`text-sm font-bold ${s.match >= 80 ? "text-green-600" : "text-red-600"}`}>{s.match}%</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {result && (
+          <div className={`rounded-xl p-4 text-sm flex items-start gap-2 ${result.ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
+            {result.ok ? <CheckCircle className="w-5 h-5 mt-0.5" /> : <AlertTriangle className="w-5 h-5 mt-0.5" />}
+            <div className="flex-1">{result.msg}</div>
+            <button onClick={() => setResult(null)}><X className="w-4 h-4" /></button>
+          </div>
+        )}
+
+        {!cameraOn && today?.has_employee && (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => startCamera("check_in")}
+              disabled={!canCheckIn}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-green-500 text-white rounded-2xl font-semibold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              <LogIn className="w-5 h-5" /> ลงเวลาเข้างาน
+            </button>
+            <button
+              onClick={() => startCamera("check_out")}
+              disabled={!canCheckOut}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-red-500 text-white rounded-2xl font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              <LogOut className="w-5 h-5" /> ลงเวลาออกงาน
+            </button>
+          </div>
+        )}
+
+        {cameraOn && (
+          <div className="bg-white rounded-2xl border border-border p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold flex items-center gap-2">
+                <Camera className="w-5 h-5 text-primary-600" />
+                {pendingType === "check_in" ? "ถ่ายเซลฟี่เข้างาน" : "ถ่ายเซลฟี่ออกงาน"}
+              </h4>
+              <button onClick={stopCamera} className="text-sm text-muted hover:text-foreground inline-flex items-center gap-1">
+                <X className="w-4 h-4" /> ยกเลิก
+              </button>
+            </div>
+            <div className="relative rounded-xl overflow-hidden bg-black">
+              <video ref={videoRef} className="w-full max-h-[480px] object-contain" style={{ transform: "scaleX(-1)" }} playsInline muted />
+              <div className="absolute bottom-2 left-2 right-2 bg-black/55 text-white text-xs p-2 rounded">
+                <div>{now.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "medium" })}</div>
+                {pos && <div className="font-mono">{pos.lat.toFixed(6)}, {pos.lng.toFixed(6)} (±{pos.accuracy.toFixed(0)}m)</div>}
+                {near && <div>{near.office.name} • ห่าง {near.distance.toFixed(0)} ม.</div>}
               </div>
             </div>
-          )}
-        </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">หมายเหตุ (ไม่บังคับ)</label>
+              <input value={note} onChange={(e) => setNote(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" placeholder="เช่น ออกงานนอกสถานที่" />
+            </div>
+            <button
+              onClick={capture}
+              disabled={submitting || !pos}
+              className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary-600 text-white rounded-2xl font-semibold hover:bg-primary-700 disabled:opacity-50 transition"
+            >
+              <Camera className="w-5 h-5" />
+              {submitting ? "กำลังส่ง..." : "ถ่ายและบันทึก"}
+            </button>
+          </div>
+        )}
       </div>
     </>
   );

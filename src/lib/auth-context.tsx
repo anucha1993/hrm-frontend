@@ -60,7 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       setToken(res.token);
       setUser(res.user);
-      router.push("/dashboard");
+      // Employee role → ไปหน้าลงเวลาโดยตรง
+      const target = res.user.role?.name === "employee" ? "/attendance" : "/dashboard";
+      router.push(target);
     },
     [router]
   );
