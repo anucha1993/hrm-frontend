@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -240,22 +239,20 @@ export default function AttendanceCheckInPage() {
   const insideGeofence = near ? (!near.office.enforce_geofence || near.distance <= near.office.radius_m) : false;
 
   return (
-    <>
-      <Topbar title="ลงเวลาเข้า-ออก" />
-      <div className="p-6 space-y-6 max-w-5xl mx-auto">
-        <div className="bg-gradient-to-r from-primary-500 to-accent-500 rounded-2xl p-6 text-white">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <p className="text-white/70 text-sm">วันนี้</p>
-              <h3 className="text-xl font-bold mt-1">{fmtDateThai(now)}</h3>
+    <div className="px-4 py-4 space-y-4 max-w-md mx-auto">
+        <div className="bg-gradient-to-r from-primary-500 to-accent-500 rounded-2xl p-4 text-white">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-white/70 text-xs">วันนี้</p>
+              <h3 className="text-base font-bold mt-0.5 truncate">{fmtDateThai(now)}</h3>
               {today?.employee && (
-                <p className="text-white/80 text-sm mt-1">
+                <p className="text-white/80 text-xs mt-1 truncate">
                   {today.employee.first_name} {today.employee.last_name} • {today.employee.employee_code}
                 </p>
               )}
             </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold font-mono">
+            <div className="text-center shrink-0">
+              <div className="text-2xl font-bold font-mono">
                 {now.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
               </div>
               <p className="text-sm text-white/60 mt-1">เวลาปัจจุบัน</p>
@@ -269,32 +266,32 @@ export default function AttendanceCheckInPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl border border-border p-4">
-            <div className="flex items-center gap-2 mb-2">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-xl border border-border p-3">
+            <div className="flex items-center gap-2 mb-1.5">
               <LogIn className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-semibold">เวลาเข้าล่าสุด</span>
+              <span className="text-xs font-semibold">เวลาเข้า</span>
             </div>
-            <div className="text-2xl font-mono">{fmtTime(lastIn?.checked_at)}</div>
-            {lastIn && <div className="mt-2"><Badge label={statusBadge(lastIn.status).label} variant={statusBadge(lastIn.status).variant} /></div>}
+            <div className="text-xl font-mono">{fmtTime(lastIn?.checked_at)}</div>
+            {lastIn && <div className="mt-1.5"><Badge label={statusBadge(lastIn.status).label} variant={statusBadge(lastIn.status).variant} /></div>}
           </div>
-          <div className="bg-white rounded-xl border border-border p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="bg-white rounded-xl border border-border p-3">
+            <div className="flex items-center gap-2 mb-1.5">
               <LogOut className="w-4 h-4 text-red-500" />
-              <span className="text-sm font-semibold">เวลาออกล่าสุด</span>
+              <span className="text-xs font-semibold">เวลาออก</span>
             </div>
-            <div className="text-2xl font-mono">{fmtTime(lastOut?.checked_at)}</div>
-            {lastOut && <div className="mt-2"><Badge label={statusBadge(lastOut.status).label} variant={statusBadge(lastOut.status).variant} /></div>}
+            <div className="text-xl font-mono">{fmtTime(lastOut?.checked_at)}</div>
+            {lastOut && <div className="mt-1.5"><Badge label={statusBadge(lastOut.status).label} variant={statusBadge(lastOut.status).variant} /></div>}
           </div>
-          <div className="bg-white rounded-xl border border-border p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="bg-white rounded-xl border border-border p-3 col-span-2">
+            <div className="flex items-center gap-2 mb-1.5">
               <Clock className="w-4 h-4 text-primary-600" />
-              <span className="text-sm font-semibold">กะวันนี้</span>
+              <span className="text-xs font-semibold">กะวันนี้</span>
             </div>
             {today?.shift ? (
               <>
-                <div className="text-base font-medium">{today.shift.name}</div>
-                <div className="text-sm text-muted font-mono">
+                <div className="text-sm font-medium">{today.shift.name}</div>
+                <div className="text-xs text-muted font-mono">
                   {today.shift.start_time.substring(0, 5)} - {today.shift.end_time.substring(0, 5)}
                 </div>
               </>
@@ -424,7 +421,6 @@ export default function AttendanceCheckInPage() {
             </button>
           </div>
         )}
-      </div>
-    </>
+    </div>
   );
 }

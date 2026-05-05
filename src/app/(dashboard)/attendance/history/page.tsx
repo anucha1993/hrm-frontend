@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
 import { apiFetch } from "@/lib/api";
 import { Attendance } from "@/lib/types";
@@ -63,97 +62,78 @@ export default function AttendanceHistoryPage() {
   }, [load]);
 
   return (
-    <>
-      <Topbar title="ประวัติการลงเวลาของฉัน" />
-      <div className="p-6 space-y-4">
-        <div className="bg-white rounded-xl border border-border p-4 flex flex-wrap items-end gap-3">
+    <div className="px-4 py-4 space-y-4 max-w-md mx-auto">
+      <h2 className="text-lg font-bold">ประวัติการลงเวลาของฉัน</h2>
+
+        <div className="bg-white rounded-xl border border-border p-3 grid grid-cols-2 gap-2">
           <div>
             <label className="block text-xs font-medium text-muted mb-1">ตั้งแต่</label>
-            <input type="date" value={from} onChange={(e) => { setPage(1); setFrom(e.target.value); }} className="px-3 py-2 border border-border rounded-lg text-sm" />
+            <input type="date" value={from} onChange={(e) => { setPage(1); setFrom(e.target.value); }} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">ถึง</label>
-            <input type="date" value={to} onChange={(e) => { setPage(1); setTo(e.target.value); }} className="px-3 py-2 border border-border rounded-lg text-sm" />
+            <input type="date" value={to} onChange={(e) => { setPage(1); setTo(e.target.value); }} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
           </div>
-          <button onClick={() => load()} className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-semibold hover:bg-primary-700">รีเฟรช</button>
+          <button onClick={() => load()} className="col-span-2 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-semibold hover:bg-primary-700">รีเฟรช</button>
         </div>
 
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-surface border-b border-border text-left text-xs font-semibold text-muted uppercase">
-                <th className="px-5 py-3">รูป</th>
-                <th className="px-5 py-3">วันเวลา</th>
-                <th className="px-5 py-3">ประเภท</th>
-                <th className="px-5 py-3">สถานะ</th>
-                <th className="px-5 py-3">สถานที่</th>
-                <th className="px-5 py-3">หมายเหตุ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {loading ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-muted">กำลังโหลด...</td></tr>
-              ) : items.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-muted">ไม่พบประวัติในช่วงนี้</td></tr>
-              ) : items.map((a) => {
-                const st = statusInfo(a.status);
-                return (
-                  <tr key={a.id} className="hover:bg-surface/50">
-                    <td className="px-5 py-3">
-                      {a.photo_url ? (
-                        <button onClick={() => setPreview(a.photo_url)} className="w-12 h-12 rounded-lg overflow-hidden border border-border">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={a.photo_url} alt="" className="w-full h-full object-cover" />
-                        </button>
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-surface flex items-center justify-center text-muted">
-                          <ImageIcon className="w-4 h-4" />
-                        </div>
+        {/* Mobile card list */}
+        <div className="space-y-2">
+          {loading ? (
+            <div className="bg-white rounded-xl border border-border p-6 text-center text-muted text-sm">กำลังโหลด...</div>
+          ) : items.length === 0 ? (
+            <div className="bg-white rounded-xl border border-border p-6 text-center text-muted text-sm">ไม่พบประวัติในช่วงนี้</div>
+          ) : items.map((a) => {
+            const st = statusInfo(a.status);
+            return (
+              <div key={a.id} className="bg-white rounded-xl border border-border p-3 flex gap-3">
+                {a.photo_url ? (
+                  <button onClick={() => setPreview(a.photo_url)} className="w-16 h-16 rounded-lg overflow-hidden border border-border shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={a.photo_url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-surface flex items-center justify-center text-muted shrink-0">
+                    <ImageIcon className="w-5 h-5" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    {a.type === "check_in" ? (
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-green-600"><LogIn className="w-4 h-4" /> เข้างาน</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-red-500"><LogOut className="w-4 h-4" /> ออกงาน</span>
+                    )}
+                    <Badge label={st.label} variant={st.variant} />
+                  </div>
+                  <div className="text-xs text-muted">{fmtDateTime(a.checked_at)}</div>
+                  {a.office_location && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                      <MapPin className="w-3 h-3 text-muted" />
+                      <span className="truncate">{a.office_location.name}</span>
+                      {a.distance_m != null && <span className="text-muted">{a.distance_m.toFixed(0)}ม.</span>}
+                      {a.outside_geofence && (
+                        <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle className="w-3 h-3" /> นอกพื้นที่</span>
                       )}
-                    </td>
-                    <td className="px-5 py-3 text-sm">{fmtDateTime(a.checked_at)}</td>
-                    <td className="px-5 py-3">
-                      {a.type === "check_in" ? (
-                        <span className="inline-flex items-center gap-1 text-sm text-green-600"><LogIn className="w-3.5 h-3.5" /> เข้างาน</span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-sm text-red-500"><LogOut className="w-3.5 h-3.5" /> ออกงาน</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <Badge label={st.label} variant={st.variant} />
-                      {a.status === "late" && a.late_minutes ? <span className="ml-2 text-xs text-amber-600">({a.late_minutes} นาที)</span> : null}
-                    </td>
-                    <td className="px-5 py-3 text-sm">
-                      {a.office_location ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3 text-muted" />{a.office_location.name}</span>
-                          {a.distance_m != null && <span className="text-xs text-muted">{a.distance_m.toFixed(0)} ม.</span>}
-                          {a.outside_geofence && (
-                            <span className="inline-flex items-center gap-1 text-xs text-red-600"><AlertTriangle className="w-3 h-3" /> นอกพื้นที่</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted text-xs">ไม่ระบุ</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-sm text-muted">{a.note || "-"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+                  )}
+                  {a.note && <div className="text-xs text-muted truncate">{a.note}</div>}
+                  {a.status === "late" && a.late_minutes ? <div className="text-xs text-amber-600">สาย {a.late_minutes} นาที</div> : null}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {meta && meta.last_page > 1 && (
           <div className="flex items-center justify-between text-sm">
-            <div className="text-muted">หน้า {meta.current_page} / {meta.last_page} • {meta.total} รายการ</div>
+            <div className="text-muted text-xs">หน้า {meta.current_page} / {meta.last_page} • {meta.total} รายการ</div>
             <div className="flex gap-2">
-              <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50">ก่อนหน้า</button>
-              <button disabled={page >= meta.last_page} onClick={() => setPage(page + 1)} className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50">ถัดไป</button>
+              <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50">ก่อน</button>
+              <button disabled={page >= meta.last_page} onClick={() => setPage(page + 1)} className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50">ถัด</button>
             </div>
           </div>
         )}
-      </div>
 
       {preview && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
@@ -162,6 +142,6 @@ export default function AttendanceHistoryPage() {
           <img src={preview} alt="" className="max-w-full max-h-full rounded-xl" />
         </div>
       )}
-    </>
+    </div>
   );
 }
