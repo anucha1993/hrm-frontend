@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
 import { apiFetch, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { TodayStatus, OfficeLocation, Attendance } from "@/lib/types";
 import { Camera, LogIn, LogOut, MapPin, Clock, RefreshCw, AlertTriangle, CheckCircle, X } from "lucide-react";
 
@@ -53,6 +54,8 @@ function nearestOffice(pos: GeoPos | null, offices: OfficeLocation[]): { office:
 }
 
 export default function AttendanceCheckInPage() {
+  const { hasRole } = useAuth();
+  const isEmployee = hasRole("employee");
   const [today, setToday] = useState<TodayStatus | null>(null);
   const [now, setNow] = useState(new Date());
   const [pos, setPos] = useState<GeoPos | null>(null);
@@ -259,7 +262,7 @@ export default function AttendanceCheckInPage() {
           </div>
         </div>
 
-        {today && !today.has_employee && (
+        {today && !today.has_employee && isEmployee && (
           <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-xl p-4 text-sm">
             บัญชีของคุณยังไม่ได้เชื่อมกับข้อมูลพนักงาน กรุณาติดต่อผู้ดูแลระบบ
           </div>

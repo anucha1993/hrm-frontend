@@ -140,11 +140,13 @@ export default function Sidebar() {
   const can = (perm?: string | string[]) => !perm || hasPermission(perm);
 
   // Employee role: จำกัดให้เห็นเฉพาะเมนู "ลงเวลางาน"
+  // Non-employee role: ซ่อนเมนู "ลงเวลางาน" เพราะ admin/member ไม่ได้ใช้งาน
   const isEmployeeOnly = hasRole("employee") && !hasRole(["super_admin", "admin", "member"]);
 
   const visibleItems = menuItems
     .map((item) => {
       if (isEmployeeOnly && item.href !== "/attendance") return null;
+      if (!isEmployeeOnly && item.href === "/attendance") return null;
       if (item.children) {
         const visibleChildren = item.children.filter((c) => can(c.permission));
         if (visibleChildren.length === 0 && !can(item.permission)) return null;
