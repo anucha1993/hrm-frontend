@@ -234,6 +234,7 @@ export default function AttendanceCheckInPage() {
   const lastOut = today?.last_check_out;
   const canCheckIn = !lastIn || (!!lastOut && new Date(lastOut.checked_at) > new Date(lastIn.checked_at));
   const canCheckOut = !!lastIn && (!lastOut || new Date(lastIn.checked_at) > new Date(lastOut.checked_at));
+  const gpsReady = !!pos && !posError;
 
   const near = nearestOffice(pos, today?.office_locations || []);
   const insideGeofence = near ? (!near.office.enforce_geofence || near.distance <= near.office.radius_m) : false;
@@ -359,21 +360,34 @@ export default function AttendanceCheckInPage() {
         )}
 
         {!cameraOn && today?.has_employee && (
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={() => startCamera("check_in")}
-              disabled={!canCheckIn}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-green-500 text-white rounded-2xl font-semibold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              <LogIn className="w-5 h-5" /> ลงเวลาเข้างาน
-            </button>
-            <button
-              onClick={() => startCamera("check_out")}
-              disabled={!canCheckOut}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-red-500 text-white rounded-2xl font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              <LogOut className="w-5 h-5" /> ลงเวลาออกงาน
-            </button>
+          <div className="space-y-3">
+            {!gpsReady && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm">
+                <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+                <div>
+                  ไม่สามารถลงเวลาได้ — ระบบต้องเข้าถึงตำแหน่งของคุณก่อน
+                  {posError && <div className="text-xs text-red-600 mt-1">{posError}</div>}
+                </div>
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => startCamera("check_in")}
+                disabled={!canCheckIn || !gpsReady}
+                title={!gpsReady ? "ต้องเข้าถึงตำแหน่ง GPS ก่อน" : undefined}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-green-500 text-white rounded-2xl font-semibold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <LogIn className="w-5 h-5" /> ลงเวลาเข้างาน
+              </button>
+              <button
+                onClick={() => startCamera("check_out")}
+                disabled={!canCheckOut || !gpsReady}
+                title={!gpsReady ? "ต้องเข้าถึงตำแหน่ง GPS ก่อน" : undefined}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-red-500 text-white rounded-2xl font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <LogOut className="w-5 h-5" /> ลงเวลาออกงาน
+              </button>
+            </div>
           </div>
         )}
 
