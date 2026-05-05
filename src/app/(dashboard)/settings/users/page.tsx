@@ -169,13 +169,21 @@ export default function UsersPage() {
             </Link>
             <h3 className="text-lg font-semibold text-foreground">จัดการผู้ใช้งาน</h3>
           </div>
-          {canCreate && (
+          {canCreate && tab === "system" && (
             <button
               onClick={openCreate}
               className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold"
             >
-              <Plus className="w-4 h-4" /> {tab === "system" ? "เพิ่มผู้ใช้งาน" : "เพิ่มบัญชีพนักงาน"}
+              <Plus className="w-4 h-4" /> เพิ่มผู้ใช้งาน
             </button>
+          )}
+          {tab === "employee" && (
+            <Link
+              href="/employees/new"
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold"
+            >
+              <Plus className="w-4 h-4" /> เพิ่มพนักงาน
+            </Link>
           )}
         </div>
 
@@ -194,6 +202,18 @@ export default function UsersPage() {
             บัญชีพนักงาน (Employee)
           </button>
         </div>
+
+        {tab === "employee" && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-xl p-4 text-sm space-y-1">
+            <p className="font-semibold">บัญชีพนักงานถูกซิงค์อัตโนมัติจากข้อมูลพนักงาน</p>
+            <ul className="list-disc list-inside text-xs text-blue-700 space-y-0.5">
+              <li><strong>Username (อีเมล)</strong> = รหัสพนักงาน + <code>@cyc-hrm.local</code></li>
+              <li><strong>Password</strong> = เลข ปปช./พาสปอร์ต (รีเซ็ตอัตโนมัติเมื่อแก้ไขข้อมูลพนักงาน)</li>
+              <li>การแก้ไขชื่อ/อีเมลควรทำที่ <Link href="/employees" className="underline font-medium">หน้าจัดการพนักงาน</Link> เพื่อให้สอดคล้องกัน</li>
+              <li>ที่นี่ใช้สำหรับ <strong>รีเซ็ตรหัสผ่าน</strong> หรือ <strong>เปิด/ปิดการใช้งาน</strong> เท่านั้น</li>
+            </ul>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -313,7 +333,10 @@ export default function UsersPage() {
       </div>
 
       {/* Modal */}
-      {showModal && (
+      {showModal && (() => {
+        const editingRoleName = roles.find((r) => r.id === form.role_id)?.name;
+        const isEmployeeAccount = editingRoleName === "employee";
+        return (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -333,13 +356,20 @@ export default function UsersPage() {
                   {error}
                 </div>
               )}
+              {isEmployeeAccount && form.id && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                  บัญชีนี้เป็น <strong>Employee</strong> — ชื่อและอีเมลจะถูกซิงค์อัตโนมัติจากข้อมูลพนักงาน
+                  ที่นี่สามารถแก้เฉพาะ <strong>รหัสผ่าน</strong> และ <strong>สถานะการใช้งาน</strong> เท่านั้น
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">ชื่อ</label>
                 <input
                   required
+                  readOnly={isEmployeeAccount && !!form.id}
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-border text-sm"
+                  className={`w-full px-3 py-2 rounded-lg border border-border text-sm ${isEmployeeAccount && form.id ? "bg-surface text-muted cursor-not-allowed" : ""}`}
                 />
               </div>
               <div>
@@ -347,9 +377,10 @@ export default function UsersPage() {
                 <input
                   type="email"
                   required
+                  readOnly={isEmployeeAccount && !!form.id}
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-border text-sm"
+                  className={`w-full px-3 py-2 rounded-lg border border-border text-sm ${isEmployeeAccount && form.id ? "bg-surface text-muted cursor-not-allowed" : ""}`}
                 />
               </div>
               <div>
@@ -363,16 +394,22 @@ export default function UsersPage() {
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg border border-border text-sm"
                 />
+                {isEmployeeAccount && form.id && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    หมายเหตุ: ถ้ามีการแก้ไข &ldquo;เลข ปปช./พาสปอร์ต&rdquo; ในข้อมูลพนักงานในภายหลัง รหัสผ่านจะถูก reset ตามค่าใหม่
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">บทบาท</label>
                 <select
                   required
+                  disabled={isEmployeeAccount && !!form.id}
                   value={form.role_id}
                   onChange={(e) =>
                     setForm({ ...form, role_id: e.target.value ? Number(e.target.value) : "" })
                   }
-                  className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-white"
+                  className={`w-full px-3 py-2 rounded-lg border border-border text-sm bg-white ${isEmployeeAccount && form.id ? "bg-surface text-muted cursor-not-allowed" : ""}`}
                 >
                   <option value="">— เลือกบทบาท —</option>
                   {tabRoleObjects.map((r) => (
@@ -410,7 +447,8 @@ export default function UsersPage() {
             </form>
           </div>
         </div>
-      )}
+        );
+      })()}
     </>
   );
 }
