@@ -47,9 +47,23 @@ export default function AttendanceHistoryPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ from, to, page: page.toString() });
-      const data = await apiFetch<Paginated<Attendance>>(`/attendance/my-history?${params.toString()}`);
-      setItems(data.data || []);
-      setMeta(data.meta || null);
+      const res = await apiFetch<{ data: Paginated<Attendance> } | Paginated<Attendance> | { data: Attendance[] }>(`/attendance/my-history?${params.toString()}`);
+      // backend wraps: { data: paginator } | { data: [] } when no employee
+      let list: Attendance[] = [];
+      let m: Paginated<Attendance>["meta"] | null = null;
+      if (Array.isArray(res)) {
+        list = res;
+      } else if ("data" in res) {
+        const inner = res.data as Paginated<Attendance> | Attendance[];
+        if (Array.isArray(inner)) {
+          list = inner;
+        } else if (inner && Array.isArray(inner.data)) {
+          list = inner.data;
+          m = inner.meta || null;
+        }
+      }
+      setItems(list);
+      setMeta(m);
     } catch (e) {
       console.error(e);
     } finally {
