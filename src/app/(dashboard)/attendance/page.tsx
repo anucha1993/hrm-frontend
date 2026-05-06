@@ -149,55 +149,124 @@ export default function AttendanceCheckInPage() {
     setFaceState("idle");
   }
 
-  // Face detection loop using native FaceDetector API (Chromium)
+  // Face/skin detection loop. ใช้ FaceDetector API ถ้ามี, ไม่งั้น fallback เป็น skin-tone heuristic
   useEffect(() => {
     if (!cameraOn) return;
     type FDFace = { boundingBox: DOMRectReadOnly };
     type FDCtor = new (opts?: { fastMode?: boolean }) => { detect: (s: CanvasImageSource) => Promise<FDFace[]> };
     const FD = (window as unknown as { FaceDetector?: FDCtor }).FaceDetector;
-    if (!FD) {
-      setFaceState("unsupported");
-      return;
-    }
-    const detector = new FD({ fastMode: true });
+    const detector = FD ? new FD({ fastMode: true }) : null;
+
     setFaceState("searching");
     let stopped = false;
-    let raf = 0;
+    let timer = 0;
+
+    // Offscreen canvas สำหรับ fallback
+    const sampleCanvas = document.createElement("canvas");
+    const SAMPLE_W = 160;
+    const SAMPLE_H = 120;
+    sampleCanvas.width = SAMPLE_W;
+    sampleCanvas.height = SAMPLE_H;
+    const sctx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+
+    // ตรวจว่าเป็น skin tone ไหม (RGB heuristic)
+    const isSkin = (r: number, g: number, b: number) => {
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      return r > 95 && g > 40 && b > 20 &&
+        max - min > 15 &&
+        Math.abs(r - g) > 15 &&
+        r > g && r > b;
+    };
+
+    const detectByPixels = () => {
+      const v = videoRef.current;
+      if (!v || v.videoWidth === 0 || !sctx) return;
+      // Mirror to match preview
+      sctx.save();
+      sctx.translate(SAMPLE_W, 0);
+      sctx.scale(-1, 1);
+      sctx.drawImage(v, 0, 0, SAMPLE_W, SAMPLE_H);
+      sctx.restore();
+      const img = sctx.getImageData(0, 0, SAMPLE_W, SAMPLE_H);
+      const data = img.data;
+
+      let totalSkin = 0;
+      let sumX = 0, sumY = 0;
+      let minX = SAMPLE_W, maxX = 0, minY = SAMPLE_H, maxY = 0;
+
+      // sample every 2 px
+      for (let y = 0; y < SAMPLE_H; y += 2) {
+        for (let x = 0; x < SAMPLE_W; x += 2) {
+          const i = (y * SAMPLE_W + x) * 4;
+          if (isSkin(data[i], data[i + 1], data[i + 2])) {
+            totalSkin++;
+            sumX += x; sumY += y;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      const sampledPixels = (SAMPLE_W * SAMPLE_H) / 4;
+      const skinRatio = totalSkin / sampledPixels;
+
+      if (totalSkin < 50 || skinRatio < 0.02) {
+        setFaceState("searching");
+        return;
+      }
+
+      const cx = sumX / totalSkin;
+      const cy = sumY / totalSkin;
+      const offX = Math.abs(cx - SAMPLE_W / 2) / SAMPLE_W;
+      const offY = Math.abs(cy - SAMPLE_H / 2) / SAMPLE_H;
+      const bboxArea = (maxX - minX) * (maxY - minY);
+      const areaRatio = bboxArea / (SAMPLE_W * SAMPLE_H);
+
+      if (skinRatio < 0.05 || areaRatio < 0.08) setFaceState("too_small");
+      else if (skinRatio > 0.55 || areaRatio > 0.75) setFaceState("too_large");
+      else if (offX > 0.18 || offY > 0.22) setFaceState("off_center");
+      else setFaceState("ok");
+    };
 
     const tick = async () => {
       if (stopped) return;
       const v = videoRef.current;
       if (v && v.videoWidth > 0 && !snapshot) {
-        try {
-          const faces = await detector.detect(v);
-          if (faces.length === 0) {
-            setFaceState("searching");
-          } else {
-            // เลือกใบหน้าที่ใหญ่ที่สุด
-            const face = faces.reduce((a, b) => (a.boundingBox.width * a.boundingBox.height >= b.boundingBox.width * b.boundingBox.height ? a : b));
-            const bb = face.boundingBox;
-            const vw = v.videoWidth, vh = v.videoHeight;
-            const faceRatio = (bb.width * bb.height) / (vw * vh);
-            // ตรวจจุดกึ่งกลางใบหน้าเทียบกับกึ่งกลางจอ
-            const cx = bb.x + bb.width / 2;
-            const cy = bb.y + bb.height / 2;
-            const offX = Math.abs(cx - vw / 2) / vw;
-            const offY = Math.abs(cy - vh / 2) / vh;
-            if (faceRatio < 0.06) setFaceState("too_small");
-            else if (faceRatio > 0.55) setFaceState("too_large");
-            else if (offX > 0.18 || offY > 0.22) setFaceState("off_center");
-            else setFaceState("ok");
+        if (detector) {
+          try {
+            const faces = await detector.detect(v);
+            if (faces.length === 0) {
+              setFaceState("searching");
+            } else {
+              const face = faces.reduce((a, b) => (a.boundingBox.width * a.boundingBox.height >= b.boundingBox.width * b.boundingBox.height ? a : b));
+              const bb = face.boundingBox;
+              const vw = v.videoWidth, vh = v.videoHeight;
+              const faceRatio = (bb.width * bb.height) / (vw * vh);
+              const cx = bb.x + bb.width / 2;
+              const cy = bb.y + bb.height / 2;
+              const offX = Math.abs(cx - vw / 2) / vw;
+              const offY = Math.abs(cy - vh / 2) / vh;
+              if (faceRatio < 0.06) setFaceState("too_small");
+              else if (faceRatio > 0.55) setFaceState("too_large");
+              else if (offX > 0.18 || offY > 0.22) setFaceState("off_center");
+              else setFaceState("ok");
+            }
+          } catch {
+            detectByPixels();
           }
-        } catch {
-          // ignore frame errors
+        } else {
+          detectByPixels();
         }
       }
-      raf = window.setTimeout(tick, 350) as unknown as number;
+      timer = window.setTimeout(tick, 300) as unknown as number;
     };
     tick();
     return () => {
       stopped = true;
-      clearTimeout(raf);
+      clearTimeout(timer);
     };
   }, [cameraOn, snapshot]);
 
