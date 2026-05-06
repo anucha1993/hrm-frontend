@@ -63,8 +63,9 @@ export default function AttendanceCheckInPage() {
   const [cameraOn, setCameraOn] = useState(false);
   const [pendingType, setPendingType] = useState<"check_in" | "check_out" | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [captureStage, setCaptureStage] = useState<"" | "snap" | "processing" | "uploading">("");
+  const [captureStage, setCaptureStage] = useState<"" | "snap" | "uploading">("");
   const [snapshot, setSnapshot] = useState<string | null>(null);
+  const [snapshotBlob, setSnapshotBlob] = useState<Blob | null>(null);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [faceState, setFaceState] = useState<"idle" | "searching" | "ok" | "too_small" | "too_large" | "off_center" | "unsupported">("idle");
   const [note, setNote] = useState("");
@@ -147,6 +148,8 @@ export default function AttendanceCheckInPage() {
     setPendingType(null);
     setNote("");
     setFaceState("idle");
+    setSnapshot(null);
+    setSnapshotBlob(null);
   }
 
   // Face/skin detection loop. ใช้ FaceDetector API ถ้ามี, ไม่งั้น fallback เป็น skin-tone heuristic
@@ -305,6 +308,7 @@ export default function AttendanceCheckInPage() {
     ctx.textAlign = "left";
   }
 
+  // ขั้นที่ 1: ถ่ายภาพและแสดง preview ให้ยืนยัน
   async function capture() {
     if (!videoRef.current || !pendingType) return;
     if (!pos) {
@@ -315,11 +319,7 @@ export default function AttendanceCheckInPage() {
       setResult({ ok: false, msg: "กรุณาจัดใบหน้าให้อยู่ในกรอบก่อนถ่าย" });
       return;
     }
-    // แสดง feedback ทันที: shutter flash + snapshot preview
-    setSubmitting(true);
     setCaptureStage("snap");
-
-    // หยุด 1 frame ให้ React วาด UI ก่อนทำงานหนัก
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     try {
@@ -334,26 +334,32 @@ export default function AttendanceCheckInPage() {
       ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, w, h);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-
       drawWatermark(ctx, w, h, pos, today?.office_locations || []);
-
-      // แสดง preview ทันที
-      setSnapshot(canvas.toDataURL("image/jpeg", 0.6));
-      setCaptureStage("processing");
-      await new Promise((r) => requestAnimationFrame(r));
 
       const blob: Blob = await new Promise((resolve, reject) => {
         canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", 0.85);
       });
+      setSnapshotBlob(blob);
+      setSnapshot(canvas.toDataURL("image/jpeg", 0.7));
+    } catch (e) {
+      setResult({ ok: false, msg: e instanceof Error ? e.message : "ถ่ายไม่สำเร็จ" });
+    } finally {
+      setCaptureStage("");
+    }
+  }
 
-      setCaptureStage("uploading");
-
+  // ขั้นที่ 2: ยืนยัน → อัปโหลด
+  async function confirmAndUpload() {
+    if (!snapshotBlob || !pendingType || !pos) return;
+    setSubmitting(true);
+    setCaptureStage("uploading");
+    try {
       const fd = new FormData();
       fd.append("type", pendingType);
       fd.append("latitude", pos.lat.toString());
       fd.append("longitude", pos.lng.toString());
       fd.append("accuracy_m", pos.accuracy.toFixed(1));
-      fd.append("photo", blob, `selfie-${Date.now()}.jpg`);
+      fd.append("photo", snapshotBlob, `selfie-${Date.now()}.jpg`);
       if (note.trim()) fd.append("note", note.trim());
 
       const res = await apiFetch<{ message: string; data: Attendance }>("/attendance/check-in", {
@@ -363,15 +369,20 @@ export default function AttendanceCheckInPage() {
       setResult({ ok: true, msg: res.message });
       stopCamera();
       setSnapshot(null);
+      setSnapshotBlob(null);
       await loadToday();
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
       setResult({ ok: false, msg });
-      setSnapshot(null);
     } finally {
       setSubmitting(false);
       setCaptureStage("");
     }
+  }
+
+  function retakePhoto() {
+    setSnapshot(null);
+    setSnapshotBlob(null);
   }
 
   const lastIn = today?.last_check_in;
@@ -438,31 +449,13 @@ export default function AttendanceCheckInPage() {
           </div>
         )}
 
-        {/* สถิติเข้า-ออก + กะ (รวมใน card เดียว) */}
-        <div className="bg-white rounded-xl border border-border p-3 space-y-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center gap-1.5 text-xs text-muted">
-                <LogIn className="w-3.5 h-3.5 text-green-600" /> เวลาเข้า
-              </div>
-              <div className="text-lg font-mono mt-0.5">{fmtTime(lastIn?.checked_at)}</div>
-              {lastIn && lastIn.status !== "normal" && <div className="mt-1"><Badge label={statusBadge(lastIn.status).label} variant={statusBadge(lastIn.status).variant} /></div>}
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 text-xs text-muted">
-                <LogOut className="w-3.5 h-3.5 text-red-500" /> เวลาออก
-              </div>
-              <div className="text-lg font-mono mt-0.5">{fmtTime(lastOut?.checked_at)}</div>
-              {lastOut && lastOut.status !== "normal" && <div className="mt-1"><Badge label={statusBadge(lastOut.status).label} variant={statusBadge(lastOut.status).variant} /></div>}
-            </div>
+        {/* แสดงเฉพาะกะวันนี้ (สั้น ๆ) */}
+        {!cameraOn && today?.shift && (
+          <div className="bg-white rounded-xl border border-border px-3 py-2 text-xs text-muted flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            กะ {today.shift.name} • {today.shift.start_time.substring(0, 5)}-{today.shift.end_time.substring(0, 5)}
           </div>
-          {today?.shift && (
-            <div className="text-xs text-muted pt-2 border-t border-border flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              กะ {today.shift.name} • {today.shift.start_time.substring(0, 5)}-{today.shift.end_time.substring(0, 5)}
-            </div>
-          )}
-        </div>
+        )}
 
         {result && (
           <div className={`rounded-xl p-4 text-sm flex items-start gap-2 ${result.ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
@@ -536,48 +529,74 @@ export default function AttendanceCheckInPage() {
                 {near && <div>{near.office.name} • ห่าง {near.distance.toFixed(0)} ม.</div>}
               </div>
 
-              {/* Shutter flash + snapshot overlay */}
+              {/* Shutter flash */}
               {captureStage === "snap" && (
-                <div className="absolute inset-0 bg-white animate-[flash_0.25s_ease-out]" style={{ animation: "flash 0.25s ease-out" }} />
+                <div className="absolute inset-0 bg-white" style={{ animation: "flash 0.25s ease-out" }} />
               )}
+              {/* Snapshot preview */}
               {snapshot && (
                 <div className="absolute inset-0 bg-black flex items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={snapshot} alt="ตัวอย่าง" className="w-full max-h-[480px] object-contain" />
-                  <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white gap-2">
-                    <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-                    <div className="text-sm font-semibold">
-                      {captureStage === "processing" && "กำลังประมวลผลภาพ..."}
-                      {captureStage === "uploading" && "กำลังอัปโหลด..."}
+                  {captureStage === "uploading" && (
+                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white gap-2">
+                      <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                      <div className="text-sm font-semibold">กำลังอัปโหลด...</div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
             <div>
               <label className="block text-xs font-medium text-muted mb-1">หมายเหตุ (ไม่บังคับ)</label>
-              <input value={note} onChange={(e) => setNote(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" placeholder="เช่น ออกงานนอกสถานที่" />
+              <input value={note} onChange={(e) => setNote(e.target.value)} disabled={submitting} className="w-full px-3 py-2 border border-border rounded-lg text-sm disabled:bg-gray-50" placeholder="เช่น ออกงานนอกสถานที่" />
             </div>
-            <button
-              onClick={capture}
-              disabled={submitting || !pos || (faceState !== "ok" && faceState !== "unsupported")}
-              className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary-600 text-white rounded-2xl font-semibold hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
-            >
-              {submitting ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  {captureStage === "snap" && "กำลังถ่าย..."}
-                  {captureStage === "processing" && "กำลังประมวลผล..."}
-                  {captureStage === "uploading" && "กำลังอัปโหลด..."}
-                  {!captureStage && "กำลังส่ง..."}
-                </>
-              ) : (
-                <>
-                  <Camera className="w-5 h-5" />
-                  {faceState === "ok" || faceState === "unsupported" ? "ถ่ายและบันทึก" : "รอจัดใบหน้าให้อยู่ในกรอบ"}
-                </>
-              )}
-            </button>
+            {snapshot ? (
+              // ขั้นยืนยัน: ถ่ายซ้ำ / ยืนยัน
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={retakePhoto}
+                  disabled={submitting}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-border text-foreground rounded-2xl font-semibold hover:bg-gray-50 disabled:opacity-60 transition"
+                >
+                  <RefreshCw className="w-5 h-5" /> ถ่ายใหม่
+                </button>
+                <button
+                  onClick={confirmAndUpload}
+                  disabled={submitting}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-2xl font-semibold hover:bg-green-700 disabled:opacity-60 transition"
+                >
+                  {submitting ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      กำลังส่ง...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" /> ยืนยันและบันทึก
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={capture}
+                disabled={!pos || captureStage === "snap" || (faceState !== "ok" && faceState !== "unsupported")}
+                className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary-600 text-white rounded-2xl font-semibold hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
+              >
+                {captureStage === "snap" ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    กำลังถ่าย...
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-5 h-5" />
+                    {faceState === "ok" || faceState === "unsupported" ? "ถ่ายภาพ" : "รอจัดใบหน้าให้อยู่ในกรอบ"}
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
     </div>
