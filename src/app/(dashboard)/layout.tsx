@@ -17,7 +17,9 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   const isEmployee = user?.role?.name === "employee";
-  const allowedEmployeePaths = ["/attendance"];
+  // Employee เห็นเฉพาะหน้าลงเวลาของตัวเอง (ไม่รวม /attendance/manage)
+  const allowedEmployeePaths = ["/attendance", "/attendance/history", "/attendance/profile"];
+  const blockedEmployeePaths = ["/attendance/manage"];
 
   useEffect(() => {
     if (!loading && !user) {
@@ -29,7 +31,10 @@ export default function DashboardLayout({
       !loading &&
       user &&
       isEmployee &&
-      !allowedEmployeePaths.some((p) => pathname === p || pathname.startsWith(p + "/"))
+      (
+        blockedEmployeePaths.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
+        !allowedEmployeePaths.some((p) => pathname === p || pathname.startsWith(p + "/"))
+      )
     ) {
       router.replace("/attendance");
     }

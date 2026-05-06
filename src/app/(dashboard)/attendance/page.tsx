@@ -63,7 +63,10 @@ export default function AttendanceCheckInPage() {
   const [cameraOn, setCameraOn] = useState(false);
   const [pendingType, setPendingType] = useState<"check_in" | "check_out" | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [captureStage, setCaptureStage] = useState<"" | "snap" | "processing" | "uploading">("");
+  const [snapshot, setSnapshot] = useState<string | null>(null);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [faceState, setFaceState] = useState<"idle" | "searching" | "ok" | "too_small" | "too_large" | "off_center" | "unsupported">("idle");
   const [note, setNote] = useState("");
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -143,7 +146,60 @@ export default function AttendanceCheckInPage() {
     setCameraOn(false);
     setPendingType(null);
     setNote("");
+    setFaceState("idle");
   }
+
+  // Face detection loop using native FaceDetector API (Chromium)
+  useEffect(() => {
+    if (!cameraOn) return;
+    type FDFace = { boundingBox: DOMRectReadOnly };
+    type FDCtor = new (opts?: { fastMode?: boolean }) => { detect: (s: CanvasImageSource) => Promise<FDFace[]> };
+    const FD = (window as unknown as { FaceDetector?: FDCtor }).FaceDetector;
+    if (!FD) {
+      setFaceState("unsupported");
+      return;
+    }
+    const detector = new FD({ fastMode: true });
+    setFaceState("searching");
+    let stopped = false;
+    let raf = 0;
+
+    const tick = async () => {
+      if (stopped) return;
+      const v = videoRef.current;
+      if (v && v.videoWidth > 0 && !snapshot) {
+        try {
+          const faces = await detector.detect(v);
+          if (faces.length === 0) {
+            setFaceState("searching");
+          } else {
+            // เลือกใบหน้าที่ใหญ่ที่สุด
+            const face = faces.reduce((a, b) => (a.boundingBox.width * a.boundingBox.height >= b.boundingBox.width * b.boundingBox.height ? a : b));
+            const bb = face.boundingBox;
+            const vw = v.videoWidth, vh = v.videoHeight;
+            const faceRatio = (bb.width * bb.height) / (vw * vh);
+            // ตรวจจุดกึ่งกลางใบหน้าเทียบกับกึ่งกลางจอ
+            const cx = bb.x + bb.width / 2;
+            const cy = bb.y + bb.height / 2;
+            const offX = Math.abs(cx - vw / 2) / vw;
+            const offY = Math.abs(cy - vh / 2) / vh;
+            if (faceRatio < 0.06) setFaceState("too_small");
+            else if (faceRatio > 0.55) setFaceState("too_large");
+            else if (offX > 0.18 || offY > 0.22) setFaceState("off_center");
+            else setFaceState("ok");
+          }
+        } catch {
+          // ignore frame errors
+        }
+      }
+      raf = window.setTimeout(tick, 350) as unknown as number;
+    };
+    tick();
+    return () => {
+      stopped = true;
+      clearTimeout(raf);
+    };
+  }, [cameraOn, snapshot]);
 
   function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number, p: GeoPos, offices: OfficeLocation[]) {
     const near = nearestOffice(p, offices);
@@ -186,7 +242,17 @@ export default function AttendanceCheckInPage() {
       setResult({ ok: false, msg: "ยังไม่ได้ตำแหน่ง GPS โปรดรอสักครู่" });
       return;
     }
+    if (faceState !== "ok" && faceState !== "unsupported") {
+      setResult({ ok: false, msg: "กรุณาจัดใบหน้าให้อยู่ในกรอบก่อนถ่าย" });
+      return;
+    }
+    // แสดง feedback ทันที: shutter flash + snapshot preview
     setSubmitting(true);
+    setCaptureStage("snap");
+
+    // หยุด 1 frame ให้ React วาด UI ก่อนทำงานหนัก
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
     try {
       const video = videoRef.current;
       const w = video.videoWidth;
@@ -202,9 +268,16 @@ export default function AttendanceCheckInPage() {
 
       drawWatermark(ctx, w, h, pos, today?.office_locations || []);
 
+      // แสดง preview ทันที
+      setSnapshot(canvas.toDataURL("image/jpeg", 0.6));
+      setCaptureStage("processing");
+      await new Promise((r) => requestAnimationFrame(r));
+
       const blob: Blob = await new Promise((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", 0.9);
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", 0.85);
       });
+
+      setCaptureStage("uploading");
 
       const fd = new FormData();
       fd.append("type", pendingType);
@@ -220,12 +293,15 @@ export default function AttendanceCheckInPage() {
       });
       setResult({ ok: true, msg: res.message });
       stopCamera();
+      setSnapshot(null);
       await loadToday();
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
       setResult({ ok: false, msg });
+      setSnapshot(null);
     } finally {
       setSubmitting(false);
+      setCaptureStage("");
     }
   }
 
@@ -401,11 +477,55 @@ export default function AttendanceCheckInPage() {
             </div>
             <div className="relative rounded-xl overflow-hidden bg-black">
               <video ref={videoRef} className="w-full max-h-[480px] object-contain" style={{ transform: "scaleX(-1)" }} playsInline muted />
+
+              {/* Face guide overlay */}
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <svg viewBox="0 0 200 280" preserveAspectRatio="xMidYMid meet" className="w-[55%] h-[80%] opacity-90">
+                  <ellipse
+                    cx="100" cy="130" rx="75" ry="105"
+                    fill="none"
+                    stroke={faceState === "ok" ? "#22c55e" : faceState === "unsupported" ? "#ffffff" : "#ef4444"}
+                    strokeWidth="3"
+                    strokeDasharray={faceState === "ok" ? "0" : "6 4"}
+                  />
+                </svg>
+              </div>
+              <div className={`pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 text-white text-[11px] px-3 py-1 rounded-full font-medium ${
+                faceState === "ok" ? "bg-emerald-600/85" :
+                faceState === "unsupported" ? "bg-black/55" : "bg-rose-600/85"
+              }`}>
+                {faceState === "ok" && "✓ พร้อมถ่าย"}
+                {faceState === "searching" && "กำลังค้นหาใบหน้า..."}
+                {faceState === "too_small" && "ขยับใกล้ผู้ถ่ายอีกหน่อย"}
+                {faceState === "too_large" && "ถอยห่างออกเล็กน้อย"}
+                {faceState === "off_center" && "จัดใบหน้าให้อยู่กลางกรอบ"}
+                {faceState === "unsupported" && "จัดใบหน้าให้อยู่ในกรอบ"}
+                {faceState === "idle" && "กำลังเปิดกล้อง..."}
+              </div>
+
               <div className="absolute bottom-2 left-2 right-2 bg-black/55 text-white text-xs p-2 rounded">
                 <div>{now.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "medium" })}</div>
                 {pos && <div className="font-mono">{pos.lat.toFixed(6)}, {pos.lng.toFixed(6)} (±{pos.accuracy.toFixed(0)}m)</div>}
                 {near && <div>{near.office.name} • ห่าง {near.distance.toFixed(0)} ม.</div>}
               </div>
+
+              {/* Shutter flash + snapshot overlay */}
+              {captureStage === "snap" && (
+                <div className="absolute inset-0 bg-white animate-[flash_0.25s_ease-out]" style={{ animation: "flash 0.25s ease-out" }} />
+              )}
+              {snapshot && (
+                <div className="absolute inset-0 bg-black flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={snapshot} alt="ตัวอย่าง" className="w-full max-h-[480px] object-contain" />
+                  <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white gap-2">
+                    <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="text-sm font-semibold">
+                      {captureStage === "processing" && "กำลังประมวลผลภาพ..."}
+                      {captureStage === "uploading" && "กำลังอัปโหลด..."}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-muted mb-1">หมายเหตุ (ไม่บังคับ)</label>
@@ -413,11 +533,23 @@ export default function AttendanceCheckInPage() {
             </div>
             <button
               onClick={capture}
-              disabled={submitting || !pos}
-              className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary-600 text-white rounded-2xl font-semibold hover:bg-primary-700 disabled:opacity-50 transition"
+              disabled={submitting || !pos || (faceState !== "ok" && faceState !== "unsupported")}
+              className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary-600 text-white rounded-2xl font-semibold hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
             >
-              <Camera className="w-5 h-5" />
-              {submitting ? "กำลังส่ง..." : "ถ่ายและบันทึก"}
+              {submitting ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  {captureStage === "snap" && "กำลังถ่าย..."}
+                  {captureStage === "processing" && "กำลังประมวลผล..."}
+                  {captureStage === "uploading" && "กำลังอัปโหลด..."}
+                  {!captureStage && "กำลังส่ง..."}
+                </>
+              ) : (
+                <>
+                  <Camera className="w-5 h-5" />
+                  {faceState === "ok" || faceState === "unsupported" ? "ถ่ายและบันทึก" : "รอจัดใบหน้าให้อยู่ในกรอบ"}
+                </>
+              )}
             </button>
           </div>
         )}

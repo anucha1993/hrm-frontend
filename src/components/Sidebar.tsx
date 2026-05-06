@@ -59,11 +59,20 @@ const menuItems: MenuItem[] = [
     label: "ลงเวลางาน",
     href: "/attendance",
     icon: Clock,
-    permission: ["attendance.checkin", "attendance.view"],
+    permission: "attendance.checkin",
     children: [
       { label: "บันทึกเวลา", href: "/attendance", permission: "attendance.checkin" },
       { label: "ประวัติของฉัน", href: "/attendance/history", permission: "attendance.checkin" },
-      { label: "ประวัติทั้งหมด", href: "/attendance/manage", permission: "attendance.view" },
+    ],
+  },
+  {
+    label: "จัดการเวลาทำงาน",
+    href: "/attendance/manage",
+    icon: ClipboardList,
+    permission: ["attendance.view", "attendance.manage"],
+    children: [
+      { label: "ภาพรวมการลงเวลา", href: "/attendance/manage", permission: "attendance.view" },
+      { label: "รายงานเวลางาน", href: "/reports/attendance", permission: "reports.view" },
     ],
   },
   {
@@ -140,13 +149,12 @@ export default function Sidebar() {
   const can = (perm?: string | string[]) => !perm || hasPermission(perm);
 
   // Employee role: จำกัดให้เห็นเฉพาะเมนู "ลงเวลางาน"
-  // Non-employee role: ซ่อนเมนู "ลงเวลางาน" เพราะ admin/member ไม่ได้ใช้งาน
+  // Role อื่น (admin/super_admin/member): เห็นเมนู "ลงเวลางาน" ได้ แต่จะ check-in ไม่ได้ที่หน้าลงเวลา
   const isEmployeeOnly = hasRole("employee") && !hasRole(["super_admin", "admin", "member"]);
 
   const visibleItems = menuItems
     .map((item) => {
       if (isEmployeeOnly && item.href !== "/attendance") return null;
-      if (!isEmployeeOnly && item.href === "/attendance") return null;
       if (item.children) {
         const visibleChildren = item.children.filter((c) => can(c.permission));
         if (visibleChildren.length === 0 && !can(item.permission)) return null;
