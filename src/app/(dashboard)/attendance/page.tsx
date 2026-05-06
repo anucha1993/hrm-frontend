@@ -29,7 +29,7 @@ function fmtTime(iso?: string | null) {
 }
 
 function fmtDateThai(d: Date) {
-  return d.toLocaleDateString("th-TH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  return d.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short", year: "2-digit" });
 }
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -396,51 +396,50 @@ export default function AttendanceCheckInPage() {
 
   return (
     <div className="px-4 py-3 space-y-3 max-w-md mx-auto">
-        {/* Header: เวลา + ตำแหน่ง */}
-        <div className="bg-gradient-to-r from-primary-500 to-accent-500 rounded-2xl p-4 text-white">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-white/70 text-xs">{fmtDateThai(now)}</p>
-              <div className="text-3xl font-bold font-mono mt-0.5">
-                {now.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-              </div>
-            </div>
-            <div className="text-right shrink-0 text-xs">
-              {pos ? (
-                near ? (
-                  insideGeofence ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/20">
-                      <CheckCircle className="w-3 h-3" /> ในพื้นที่
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/30">
-                      <AlertTriangle className="w-3 h-3" /> นอกพื้นที่
-                    </span>
-                  )
+        {/* Header: เวลา + ตำแหน่ง (compact) */}
+        <div className="bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl px-3 py-2 text-white flex items-center justify-between gap-2">
+          <div className="min-w-0 flex items-center gap-2">
+            <span className="text-lg font-bold font-mono leading-none">
+              {now.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
+            <span className="text-white/70 text-[10px] leading-tight">{fmtDateThai(now)}</span>
+            {today?.employee && (
+              <span className="text-white/80 text-[10px] leading-tight truncate hidden sm:inline">
+                • {today.employee.first_name} {today.employee.employee_code}
+              </span>
+            )}
+          </div>
+          <div className="shrink-0 text-[10px]">
+            {pos ? (
+              near ? (
+                insideGeofence ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/20">
+                    <CheckCircle className="w-3 h-3" /> ในพื้นที่
+                  </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/20">
-                    <MapPin className="w-3 h-3" /> GPS พร้อม
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/30">
+                    <AlertTriangle className="w-3 h-3" /> นอกพื้นที่
                   </span>
                 )
-              ) : posError ? (
-                <button
-                  onClick={() => { setPosError(null); setGeoNonce((n) => n + 1); }}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/40 hover:bg-red-500/60"
-                >
-                  <RefreshCw className="w-3 h-3" /> GPS ผิดพลาด แตะลองใหม่
-                </button>
               ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/20">
-                  <RefreshCw className="w-3 h-3 animate-spin" /> หา GPS
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/20">
+                  <MapPin className="w-3 h-3" /> GPS
                 </span>
-              )}
-            </div>
+              )
+            ) : posError ? (
+              <button
+                onClick={() => { setPosError(null); setGeoNonce((n) => n + 1); }}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-500/40 hover:bg-red-500/60"
+                title={posError}
+              >
+                <RefreshCw className="w-3 h-3" /> GPS
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/20">
+                <RefreshCw className="w-3 h-3 animate-spin" /> GPS
+              </span>
+            )}
           </div>
-          {today?.employee && (
-            <p className="text-white/80 text-xs mt-2 truncate">
-              {today.employee.first_name} {today.employee.last_name} • {today.employee.employee_code}
-            </p>
-          )}
         </div>
 
         {today && !today.has_employee && isEmployee && (
