@@ -384,113 +384,84 @@ export default function AttendanceCheckInPage() {
   const insideGeofence = near ? (!near.office.enforce_geofence || near.distance <= near.office.radius_m) : false;
 
   return (
-    <div className="px-4 py-4 space-y-4 max-w-md mx-auto">
+    <div className="px-4 py-3 space-y-3 max-w-md mx-auto">
+        {/* Header: เวลา + ตำแหน่ง */}
         <div className="bg-gradient-to-r from-primary-500 to-accent-500 rounded-2xl p-4 text-white">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-white/70 text-xs">วันนี้</p>
-              <h3 className="text-base font-bold mt-0.5 truncate">{fmtDateThai(now)}</h3>
-              {today?.employee && (
-                <p className="text-white/80 text-xs mt-1 truncate">
-                  {today.employee.first_name} {today.employee.last_name} • {today.employee.employee_code}
-                </p>
-              )}
-            </div>
-            <div className="text-center shrink-0">
-              <div className="text-2xl font-bold font-mono">
+              <p className="text-white/70 text-xs">{fmtDateThai(now)}</p>
+              <div className="text-3xl font-bold font-mono mt-0.5">
                 {now.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
               </div>
-              <p className="text-sm text-white/60 mt-1">เวลาปัจจุบัน</p>
+            </div>
+            <div className="text-right shrink-0 text-xs">
+              {pos ? (
+                near ? (
+                  insideGeofence ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/20">
+                      <CheckCircle className="w-3 h-3" /> ในพื้นที่
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/30">
+                      <AlertTriangle className="w-3 h-3" /> นอกพื้นที่
+                    </span>
+                  )
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/20">
+                    <MapPin className="w-3 h-3" /> GPS พร้อม
+                  </span>
+                )
+              ) : posError ? (
+                <button
+                  onClick={() => { setPosError(null); setGeoNonce((n) => n + 1); }}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/40 hover:bg-red-500/60"
+                >
+                  <RefreshCw className="w-3 h-3" /> GPS ผิดพลาด แตะลองใหม่
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/20">
+                  <RefreshCw className="w-3 h-3 animate-spin" /> หา GPS
+                </span>
+              )}
             </div>
           </div>
+          {today?.employee && (
+            <p className="text-white/80 text-xs mt-2 truncate">
+              {today.employee.first_name} {today.employee.last_name} • {today.employee.employee_code}
+            </p>
+          )}
         </div>
 
         {today && !today.has_employee && isEmployee && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-xl p-4 text-sm">
+          <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-xl p-3 text-sm">
             บัญชีของคุณยังไม่ได้เชื่อมกับข้อมูลพนักงาน กรุณาติดต่อผู้ดูแลระบบ
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-xl border border-border p-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <LogIn className="w-4 h-4 text-green-600" />
-              <span className="text-xs font-semibold">เวลาเข้า</span>
+        {/* สถิติเข้า-ออก + กะ (รวมใน card เดียว) */}
+        <div className="bg-white rounded-xl border border-border p-3 space-y-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="flex items-center gap-1.5 text-xs text-muted">
+                <LogIn className="w-3.5 h-3.5 text-green-600" /> เวลาเข้า
+              </div>
+              <div className="text-lg font-mono mt-0.5">{fmtTime(lastIn?.checked_at)}</div>
+              {lastIn && lastIn.status !== "normal" && <div className="mt-1"><Badge label={statusBadge(lastIn.status).label} variant={statusBadge(lastIn.status).variant} /></div>}
             </div>
-            <div className="text-xl font-mono">{fmtTime(lastIn?.checked_at)}</div>
-            {lastIn && <div className="mt-1.5"><Badge label={statusBadge(lastIn.status).label} variant={statusBadge(lastIn.status).variant} /></div>}
-          </div>
-          <div className="bg-white rounded-xl border border-border p-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <LogOut className="w-4 h-4 text-red-500" />
-              <span className="text-xs font-semibold">เวลาออก</span>
-            </div>
-            <div className="text-xl font-mono">{fmtTime(lastOut?.checked_at)}</div>
-            {lastOut && <div className="mt-1.5"><Badge label={statusBadge(lastOut.status).label} variant={statusBadge(lastOut.status).variant} /></div>}
-          </div>
-          <div className="bg-white rounded-xl border border-border p-3 col-span-2">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Clock className="w-4 h-4 text-primary-600" />
-              <span className="text-xs font-semibold">กะวันนี้</span>
-            </div>
-            {today?.shift ? (
-              <>
-                <div className="text-sm font-medium">{today.shift.name}</div>
-                <div className="text-xs text-muted font-mono">
-                  {today.shift.start_time.substring(0, 5)} - {today.shift.end_time.substring(0, 5)}
-                </div>
-              </>
-            ) : (
-              <div className="text-sm text-muted">ไม่ได้กำหนดกะ</div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-border p-4">
-          <div className="flex items-start gap-3">
-            <MapPin className="w-5 h-5 text-primary-600 mt-0.5" />
-            <div className="flex-1">
-              <div className="text-sm font-semibold mb-1">ตำแหน่งปัจจุบัน</div>
-              {posError ? (
-                <div className="text-sm text-red-600 space-y-2">
-                  <div>{posError}</div>
-                  <button
-                    onClick={() => { setPosError(null); setGeoNonce((n) => n + 1); }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-semibold hover:bg-primary-700"
-                  >
-                    <RefreshCw className="w-3 h-3" /> ลองใหม่
-                  </button>
-                </div>
-              ) : pos ? (
-                <>
-                  <div className="text-sm font-mono text-muted">
-                    {pos.lat.toFixed(6)}, {pos.lng.toFixed(6)} (±{pos.accuracy.toFixed(0)} ม.)
-                  </div>
-                  {near ? (
-                    <div className="text-sm mt-1 flex flex-wrap items-center gap-2">
-                      <span>{near.office.name}</span>
-                      <span className="text-muted">ห่าง {near.distance.toFixed(0)} ม.</span>
-                      {insideGeofence ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs">
-                          <CheckCircle className="w-3 h-3" /> อยู่ในพื้นที่
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs">
-                          <AlertTriangle className="w-3 h-3" /> นอกพื้นที่
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted mt-1">ไม่พบสถานที่ใกล้เคียง</div>
-                  )}
-                </>
-              ) : (
-                <div className="text-sm text-muted flex items-center gap-2">
-                  <RefreshCw className="w-3 h-3 animate-spin" /> กำลังหาตำแหน่ง...
-                </div>
-              )}
+            <div>
+              <div className="flex items-center gap-1.5 text-xs text-muted">
+                <LogOut className="w-3.5 h-3.5 text-red-500" /> เวลาออก
+              </div>
+              <div className="text-lg font-mono mt-0.5">{fmtTime(lastOut?.checked_at)}</div>
+              {lastOut && lastOut.status !== "normal" && <div className="mt-1"><Badge label={statusBadge(lastOut.status).label} variant={statusBadge(lastOut.status).variant} /></div>}
             </div>
           </div>
+          {today?.shift && (
+            <div className="text-xs text-muted pt-2 border-t border-border flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              กะ {today.shift.name} • {today.shift.start_time.substring(0, 5)}-{today.shift.end_time.substring(0, 5)}
+            </div>
+          )}
         </div>
 
         {result && (
@@ -502,34 +473,21 @@ export default function AttendanceCheckInPage() {
         )}
 
         {!cameraOn && today?.has_employee && (
-          <div className="space-y-3">
-            {!gpsReady && (
-              <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm">
-                <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
-                <div>
-                  ไม่สามารถลงเวลาได้ — ระบบต้องเข้าถึงตำแหน่งของคุณก่อน
-                  {posError && <div className="text-xs text-red-600 mt-1">{posError}</div>}
-                </div>
-              </div>
-            )}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={() => startCamera("check_in")}
-                disabled={!canCheckIn || !gpsReady}
-                title={!gpsReady ? "ต้องเข้าถึงตำแหน่ง GPS ก่อน" : undefined}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-green-500 text-white rounded-2xl font-semibold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                <LogIn className="w-5 h-5" /> ลงเวลาเข้างาน
-              </button>
-              <button
-                onClick={() => startCamera("check_out")}
-                disabled={!canCheckOut || !gpsReady}
-                title={!gpsReady ? "ต้องเข้าถึงตำแหน่ง GPS ก่อน" : undefined}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-red-500 text-white rounded-2xl font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                <LogOut className="w-5 h-5" /> ลงเวลาออกงาน
-              </button>
-            </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => startCamera("check_in")}
+              disabled={!canCheckIn || !gpsReady}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-green-500 text-white rounded-2xl font-semibold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              <LogIn className="w-5 h-5" /> ลงเวลาเข้างาน
+            </button>
+            <button
+              onClick={() => startCamera("check_out")}
+              disabled={!canCheckOut || !gpsReady}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-red-500 text-white rounded-2xl font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              <LogOut className="w-5 h-5" /> ลงเวลาออกงาน
+            </button>
           </div>
         )}
 
