@@ -17,6 +17,7 @@ import {
   ChevronRight,
   LogOut,
   Briefcase,
+  CalendarOff,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -69,10 +70,22 @@ const menuItems: MenuItem[] = [
     label: "จัดการเวลาทำงาน",
     href: "/attendance/manage",
     icon: ClipboardList,
-    permission: ["attendance.view", "attendance.manage"],
+    permission: ["attendance.view", "attendance.manage", "attendance.summary.view"],
     children: [
       { label: "ภาพรวมการลงเวลา", href: "/attendance/manage", permission: "attendance.view" },
+      { label: "สรุปเวลาทำงานรายเดือน", href: "/attendance/summary", permission: ["attendance.summary.view", "attendance.checkin"] },
       { label: "รายงานเวลางาน", href: "/reports/attendance", permission: "reports.view" },
+    ],
+  },
+  {
+    label: "การลา",
+    href: "/leave/my",
+    icon: CalendarOff,
+    permission: ["leave.request", "leave.approve", "leave.config"],
+    children: [
+      { label: "ใบลาของฉัน", href: "/leave/my", permission: "leave.request" },
+      { label: "อนุมัติใบลา", href: "/leave/approval", permission: "leave.approve" },
+      { label: "ประเภทการลา", href: "/leave/types", permission: "leave.config" },
     ],
   },
   {
@@ -91,15 +104,19 @@ const menuItems: MenuItem[] = [
     icon: Calculator,
     permission: ["payroll.view", "payroll.compute"],
     children: [
-      { label: "คำนวณเงินเดือน", href: "/payroll", permission: "payroll.compute" },
-      { label: "OT / หักเงิน", href: "/payroll/ot-deductions", permission: "payroll.compute" },
+      { label: "งวดจ่ายเงิน", href: "/payroll", permission: "payroll.view" },
+      { label: "จัดการ OT", href: "/payroll/ot-sessions", permission: "payroll.ot_manage" },
+      { label: "โปรไฟล์ค่าจ้าง", href: "/payroll/profiles", permission: "payroll.config" },
+      { label: "ตั้งค่าภาษี", href: "/payroll/tax", permission: "payroll.config" },
+      { label: "เบี้ย/หักรายการ", href: "/payroll/components", permission: "payroll.config" },
+      { label: "ค่าจ้างรายสินค้า", href: "/product-wages", permission: "payroll.view" },
     ],
   },
   {
     label: "อนุมัติเงินเดือน",
     href: "/payroll-approval",
     icon: CheckCircle,
-    permission: "payroll.approve",
+    permission: ["payroll.approve", "payroll.approve_l1", "payroll.approve_l2", "payroll.pay"],
   },
   {
     label: "รายงาน",

@@ -233,6 +233,12 @@ export type Attendance = {
   photo_path: string | null;
   photo_url: string | null;
   note: string | null;
+  source?: "device" | "manual";
+  is_edited?: boolean;
+  edited_by?: number | null;
+  edited_at?: string | null;
+  edit_reason?: string | null;
+  editor?: { id: number; name: string } | null;
   created_at: string;
   employee?: {
     id: number;
@@ -240,6 +246,18 @@ export type Attendance = {
     first_name: string;
     last_name: string;
   };
+};
+
+export type AttendanceAuditLog = {
+  id: number;
+  attendance_id: number | null;
+  employee_id: number;
+  action: "create" | "update" | "delete";
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  reason: string | null;
+  user?: { id: number; name: string } | null;
+  created_at: string;
 };
 
 export type TodayStatus = {

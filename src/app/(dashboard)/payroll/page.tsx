@@ -1,107 +1,261 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
-import StatCard from "@/components/StatCard";
-import { Calculator, DollarSign, Clock, TrendingDown, Search, Download, Settings } from "lucide-react";
+import { apiFetch } from "@/lib/api";
+import { fmtDate, type PayrollPeriod, type PeriodStatus } from "@/lib/payroll";
+import { useAuth } from "@/lib/auth-context";
+import { Plus, Calendar, X, Loader2, FileText } from "lucide-react";
 
-const payrollData = [
-  { id: "EMP001", name: "สมชาย ใจดี", dept: "ฝ่ายผลิต", baseSalary: 18000, productWage: 4500, ot: 2700, totalEarning: 25200, socialSecurity: 750, tax: 0, late: 100, totalDeduct: 850, netPay: 24350 },
-  { id: "EMP002", name: "สมหญิง รักงาน", dept: "ฝ่ายบัญชี", baseSalary: 22000, productWage: 0, ot: 1800, totalEarning: 23800, socialSecurity: 750, tax: 350, late: 0, totalDeduct: 1100, netPay: 22700 },
-  { id: "EMP003", name: "ประยุทธ์ มั่นคง", dept: "ฝ่ายขาย", baseSalary: 20000, productWage: 0, ot: 900, totalEarning: 20900, socialSecurity: 750, tax: 0, late: 200, totalDeduct: 950, netPay: 19950 },
-  { id: "EMP004", name: "วิภา สดใส", dept: "ฝ่ายบุคคล", baseSalary: 35000, productWage: 0, ot: 0, totalEarning: 35000, socialSecurity: 750, tax: 1500, late: 0, totalDeduct: 2250, netPay: 32750 },
-  { id: "EMP005", name: "มนัส ทำดี", dept: "ฝ่ายไอที", baseSalary: 30000, productWage: 0, ot: 3600, totalEarning: 33600, socialSecurity: 750, tax: 1200, late: 0, totalDeduct: 1950, netPay: 31650 },
-  { id: "EMP006", name: "นภา สวยงาม", dept: "ฝ่ายการตลาด", baseSalary: 25000, productWage: 0, ot: 0, totalEarning: 25000, socialSecurity: 750, tax: 500, late: 0, totalDeduct: 1250, netPay: 23750 },
-];
+type PeriodForm = {
+  name: string;
+  code: string;
+  start_date: string;
+  end_date: string;
+  pay_date: string;
+  note?: string;
+};
 
-const formatMoney = (n: number) => n.toLocaleString("th-TH");
+const STATUS_LABEL: Record<PeriodStatus, string> = {
+  draft: "ร่าง",
+  computing: "กำลังคำนวณ",
+  pending_l1: "รอผู้จัดการอนุมัติ",
+  pending_l2: "รอเจ้าของอนุมัติ",
+  approved: "อนุมัติแล้ว",
+  paid: "จ่ายเงินแล้ว",
+  cancelled: "ยกเลิก",
+};
 
-export default function PayrollPage() {
-  const totalNet = payrollData.reduce((a, b) => a + b.netPay, 0);
-  const totalOT = payrollData.reduce((a, b) => a + b.ot, 0);
-  const totalDeductions = payrollData.reduce((a, b) => a + b.totalDeduct, 0);
+const STATUS_VARIANT: Record<PeriodStatus, "default" | "success" | "warning" | "danger" | "info"> = {
+  draft: "default",
+  computing: "info",
+  pending_l1: "warning",
+  pending_l2: "warning",
+  approved: "info",
+  paid: "success",
+  cancelled: "default",
+};
+
+export default function PayrollPeriodsPage() {
+  const { hasPermission } = useAuth();
+  const [periods, setPeriods] = useState<PayrollPeriod[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [form, setForm] = useState<PeriodForm>({
+    name: "",
+    code: "",
+    start_date: "",
+    end_date: "",
+    pay_date: "",
+    note: "",
+  });
+
+  const canCreate = hasPermission("payroll.compute");
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await apiFetch<{ data: { data: PayrollPeriod[] } }>("/payroll/periods?per_page=50");
+      setPeriods(res.data.data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setSubmitting(true);
+    try {
+      await apiFetch("/payroll/periods", { method: "POST", body: form });
+      setShowForm(false);
+      setForm({ name: "", code: "", start_date: "", end_date: "", pay_date: "", note: "" });
+      await load();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
+      setErr(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <>
-      <Topbar title="คำนวณเงินเดือน" />
-      <div className="p-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <Topbar title="งวดจ่ายเงินเดือน" />
+      <div className="p-6 space-y-5">
+        <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-foreground">สรุปเงินเดือนประจำเดือน</h3>
-            <p className="text-sm text-muted">เมษายน 2026</p>
+            <h2 className="text-lg font-semibold text-foreground">รายการงวดจ่ายเงินเดือน</h2>
+            <p className="text-sm text-muted">สร้างงวดจ่ายได้หลายครั้งต่อเดือน • ห้ามวันที่ซ้ำกับพนักงานเดียวกัน</p>
           </div>
-          <div className="flex items-center gap-3">
-            <select className="px-4 py-2.5 rounded-xl border border-border bg-white text-sm">
-              <option>เมษายน 2026</option>
-              <option>มีนาคม 2026</option>
-            </select>
-            <button className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold hover:from-primary-600 hover:to-accent-600 transition-all shadow-lg shadow-primary-500/25">
-              <Calculator className="w-4 h-4" />
-              คำนวณใหม่
+          {canCreate && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold hover:from-primary-600 hover:to-accent-600 transition-all shadow-lg shadow-primary-500/25"
+            >
+              <Plus className="w-4 h-4" /> สร้างงวดใหม่
             </button>
-          </div>
+          )}
         </div>
 
-        {/* Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard title="เงินเดือนสุทธิรวม" value={`฿${formatMoney(totalNet)}`} icon={<DollarSign className="w-5 h-5" />} color="orange" />
-          <StatCard title="ค่า OT รวม" value={`฿${formatMoney(totalOT)}`} icon={<Clock className="w-5 h-5" />} color="blue" />
-          <StatCard title="ยอดหักรวม" value={`฿${formatMoney(totalDeductions)}`} icon={<TrendingDown className="w-5 h-5" />} color="red" />
-          <StatCard title="จำนวนพนักงาน" value={payrollData.length} icon={<Calculator className="w-5 h-5" />} color="green" />
-        </div>
-
-        {/* Table */}
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
-          <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-foreground">รายละเอียดเงินเดือน</h4>
-            <button className="flex items-center gap-2 text-sm text-primary-600 font-medium hover:text-primary-700">
-              <Download className="w-4 h-4" /> ส่งออก Excel
-            </button>
+        {loading ? (
+          <div className="flex justify-center py-12 text-muted">
+            <Loader2 className="w-5 h-5 animate-spin" />
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-surface border-b border-border">
-                  {["รหัส", "ชื่อ", "เงินเดือน", "ค่าจ้างชิ้น", "OT", "รวมรายได้", "ประกันสังคม", "ภาษี", "หักสาย", "รวมหัก", "สุทธิ"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase whitespace-nowrap">{h}</th>
-                  ))}
+        ) : periods.length === 0 ? (
+          <div className="bg-white rounded-xl border border-border p-12 text-center">
+            <Calendar className="w-12 h-12 mx-auto text-muted/40 mb-3" />
+            <p className="text-sm text-muted">ยังไม่มีงวดจ่ายเงินเดือน</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-border">
+                <tr className="text-left text-xs text-muted uppercase">
+                  <th className="px-4 py-3">รหัส</th>
+                  <th className="px-4 py-3">ชื่องวด</th>
+                  <th className="px-4 py-3">ช่วงวันที่</th>
+                  <th className="px-4 py-3">วันจ่าย</th>
+                  <th className="px-4 py-3 text-center">สลิป</th>
+                  <th className="px-4 py-3">สถานะ</th>
+                  <th className="px-4 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {payrollData.map((p) => (
-                  <tr key={p.id} className="hover:bg-surface/50">
-                    <td className="px-4 py-3 text-xs font-mono text-muted">{p.id}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-foreground whitespace-nowrap">{p.name}</td>
-                    <td className="px-4 py-3 text-sm text-foreground text-right">{formatMoney(p.baseSalary)}</td>
-                    <td className="px-4 py-3 text-sm text-foreground text-right">{formatMoney(p.productWage)}</td>
-                    <td className="px-4 py-3 text-sm text-blue-600 font-medium text-right">{formatMoney(p.ot)}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-foreground text-right">{formatMoney(p.totalEarning)}</td>
-                    <td className="px-4 py-3 text-sm text-accent-600 text-right">-{formatMoney(p.socialSecurity)}</td>
-                    <td className="px-4 py-3 text-sm text-accent-600 text-right">-{formatMoney(p.tax)}</td>
-                    <td className="px-4 py-3 text-sm text-accent-600 text-right">-{formatMoney(p.late)}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-accent-600 text-right">-{formatMoney(p.totalDeduct)}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-primary-600 text-right">{formatMoney(p.netPay)}</td>
+              <tbody>
+                {periods.map((p) => (
+                  <tr key={p.id} className="border-b border-border last:border-0 hover:bg-gray-50/60">
+                    <td className="px-4 py-3 font-mono text-xs">{p.code}</td>
+                    <td className="px-4 py-3 font-medium">{p.name}</td>
+                    <td className="px-4 py-3 text-muted">
+                      {fmtDate(p.start_date)} – {fmtDate(p.end_date)}
+                    </td>
+                    <td className="px-4 py-3">{fmtDate(p.pay_date)}</td>
+                    <td className="px-4 py-3 text-center">{p.slips_count ?? 0}</td>
+                    <td className="px-4 py-3">
+                      <Badge label={STATUS_LABEL[p.status]} variant={STATUS_VARIANT[p.status]} />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        href={`/payroll/periods/${p.id}`}
+                        className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 text-xs font-medium"
+                      >
+                        <FileText className="w-3.5 h-3.5" /> รายละเอียด
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="bg-surface font-semibold border-t-2 border-border">
-                  <td colSpan={2} className="px-4 py-3 text-sm text-foreground">รวมทั้งหมด</td>
-                  <td className="px-4 py-3 text-sm text-foreground text-right">{formatMoney(payrollData.reduce((a, b) => a + b.baseSalary, 0))}</td>
-                  <td className="px-4 py-3 text-sm text-foreground text-right">{formatMoney(payrollData.reduce((a, b) => a + b.productWage, 0))}</td>
-                  <td className="px-4 py-3 text-sm text-blue-600 text-right">{formatMoney(totalOT)}</td>
-                  <td className="px-4 py-3 text-sm text-foreground text-right">{formatMoney(payrollData.reduce((a, b) => a + b.totalEarning, 0))}</td>
-                  <td className="px-4 py-3 text-sm text-accent-600 text-right">-{formatMoney(payrollData.reduce((a, b) => a + b.socialSecurity, 0))}</td>
-                  <td className="px-4 py-3 text-sm text-accent-600 text-right">-{formatMoney(payrollData.reduce((a, b) => a + b.tax, 0))}</td>
-                  <td className="px-4 py-3 text-sm text-accent-600 text-right">-{formatMoney(payrollData.reduce((a, b) => a + b.late, 0))}</td>
-                  <td className="px-4 py-3 text-sm text-accent-600 text-right">-{formatMoney(totalDeductions)}</td>
-                  <td className="px-4 py-3 text-sm font-bold text-primary-600 text-right">{formatMoney(totalNet)}</td>
-                </tr>
-              </tfoot>
             </table>
           </div>
-        </div>
+        )}
       </div>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <form
+            onSubmit={handleSubmit}
+            className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h3 className="font-semibold">สร้างงวดจ่ายเงินเดือน</h3>
+              <button type="button" onClick={() => setShowForm(false)}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              {err && <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3">{err}</div>}
+              <Field label="ชื่องวด *">
+                <input
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="เช่น งวด 1 พ.ค. 2569"
+                  className="payroll-input"
+                />
+              </Field>
+              <Field label="รหัสงวด *">
+                <input
+                  required
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: e.target.value })}
+                  placeholder="2026-05-A"
+                  className="payroll-input"
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="เริ่มงวด *">
+                  <input
+                    type="date"
+                    required
+                    value={form.start_date}
+                    onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                    className="payroll-input"
+                  />
+                </Field>
+                <Field label="สิ้นสุดงวด *">
+                  <input
+                    type="date"
+                    required
+                    value={form.end_date}
+                    onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                    className="payroll-input"
+                  />
+                </Field>
+              </div>
+              <Field label="วันที่จ่ายเงิน *">
+                <input
+                  type="date"
+                  required
+                  value={form.pay_date}
+                  onChange={(e) => setForm({ ...form, pay_date: e.target.value })}
+                  className="payroll-input"
+                />
+              </Field>
+              <Field label="หมายเหตุ">
+                <textarea
+                  value={form.note}
+                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                  className="payroll-input min-h-[80px]"
+                />
+              </Field>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-gray-50">
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-white"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 text-sm rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                สร้างงวด
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-xs font-medium text-muted mb-1">{label}</span>
+      {children}
+    </label>
   );
 }
