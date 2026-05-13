@@ -79,39 +79,10 @@ export default function SettingsPage() {
 
         {/* Company Info Form */}
         <div className="bg-white rounded-xl border border-border p-6">
-          <h4 className="text-sm font-semibold text-foreground mb-5">ข้อมูลบริษัท</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1.5">ชื่อบริษัท</label>
-              <input type="text" defaultValue="บริษัท CYC จำกัด" className="w-full px-4 py-2.5 rounded-xl border border-border text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1.5">เลขทะเบียนนิติบุคคล</label>
-              <input type="text" defaultValue="0105564000000" className="w-full px-4 py-2.5 rounded-xl border border-border text-sm" />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-xs font-medium text-muted mb-1.5">ที่อยู่</label>
-              <textarea rows={2} defaultValue="123/45 ถ.สุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110" className="w-full px-4 py-2.5 rounded-xl border border-border text-sm resize-none"></textarea>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1.5">โทรศัพท์</label>
-              <input type="tel" defaultValue="02-123-4567" className="w-full px-4 py-2.5 rounded-xl border border-border text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1.5">อีเมล</label>
-              <input type="email" defaultValue="info@cychrm.com" className="w-full px-4 py-2.5 rounded-xl border border-border text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1.5">โลโก้บริษัท</label>
-              <div className="flex items-center gap-3">
-                <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white text-xl font-bold">CYC</div>
-                <button className="px-4 py-2 border border-border rounded-xl text-sm text-muted hover:bg-surface">เปลี่ยนโลโก้</button>
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-end mt-6">
-            <button className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold">บันทึกข้อมูล</button>
-          </div>
+          <h4 className="text-sm font-semibold text-foreground mb-2">ข้อมูลบริษัท</h4>
+          <p className="text-xs text-muted mb-4">
+            ฟอร์มจัดการข้อมูลบริษัทยังไม่ได้พัฒนา — กำลังรอ Model <code className="px-1 py-0.5 bg-gray-100 rounded">CompanySetting</code> และ API <code className="px-1 py-0.5 bg-gray-100 rounded">/settings/company</code>
+          </p>
         </div>
       </div>
     </>

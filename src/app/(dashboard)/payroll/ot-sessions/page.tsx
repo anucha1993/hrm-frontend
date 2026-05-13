@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Topbar from "@/components/Topbar";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, apiDownload, ApiError } from "@/lib/api";
 import { fmtDate, fmtMoney, type OtSession, type OtSessionEmployee } from "@/lib/payroll";
-import { Plus, X, Loader2, Edit, Trash2, AlertCircle, Users } from "lucide-react";
+import { Plus, X, Loader2, Edit, Trash2, AlertCircle, Users, Download } from "lucide-react";
 
 interface Employee {
   id: number;
@@ -164,12 +164,23 @@ export default function OtSessionsPage() {
       <div className="p-6 space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted">บันทึกรอบล่วงเวลาเพื่อนำไปคำนวณในงวดเงินเดือน</p>
-          <button
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold hover:from-primary-600 hover:to-accent-600"
-          >
-            <Plus className="w-4 h-4" /> เพิ่มรอบ OT
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                try { await apiDownload(`/payroll/ot-sessions/export`, `ot-sessions.xlsx`); }
+                catch (e) { alert(e instanceof Error ? e.message : "ดาวน์โหลดไม่สำเร็จ"); }
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700"
+            >
+              <Download className="w-4 h-4" /> ดาวน์โหลด Excel
+            </button>
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold hover:from-primary-600 hover:to-accent-600"
+            >
+              <Plus className="w-4 h-4" /> เพิ่มรอบ OT
+            </button>
+          </div>
         </div>
 
         {loading ? (

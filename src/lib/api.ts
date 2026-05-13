@@ -3,7 +3,7 @@
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
-  "http://localhost:8000/api";
+  "http://localhost:8100/api";
 
 const TOKEN_KEY = "cyc_hrm_token";
 const COOKIE_KEY = "cyc_hrm_token";
@@ -89,4 +89,52 @@ export async function apiFetch<T = unknown>(
   }
 
   return data as T;
+}
+
+/**
+ * Download a file (Blob) from the API and trigger browser download.
+ * Used for Excel/CSV exports.
+ */
+export async function apiDownload(
+  path: string,
+  filename: string,
+  init: { params?: Record<string, string | number | undefined | null> } = {}
+): Promise<void> {
+  const headers: Record<string, string> = { Accept: "application/octet-stream" };
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  let url = `${API_URL}${path}`;
+  if (init.params) {
+    const qs = new URLSearchParams();
+    Object.entries(init.params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") qs.append(k, String(v));
+    });
+    const s = qs.toString();
+    if (s) url += (url.includes("?") ? "&" : "?") + s;
+  }
+
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      if (data && typeof data === "object" && "message" in data) {
+        message = String((data as { message?: string }).message ?? message);
+      }
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, message);
+  }
+
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
 }

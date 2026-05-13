@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, apiDownload, ApiError } from "@/lib/api";
 import {
   fmtDate,
   fmtMoney,
@@ -25,6 +25,7 @@ import {
   Square,
   Trash2,
   AlertCircle,
+  Download,
 } from "lucide-react";
 
 interface Employee {
@@ -163,6 +164,20 @@ export default function PayrollPeriodDetailPage() {
             <ArrowLeft className="w-4 h-4" /> กลับไปรายการงวด
           </Link>
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={async () => {
+                try {
+                  await apiDownload(`/payroll/slips/export`, `payroll-slips-${period.code || id}.xlsx`, {
+                    params: { period_id: id },
+                  });
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : "ดาวน์โหลดไม่สำเร็จ");
+                }
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+            >
+              <Download className="w-4 h-4" /> ดาวน์โหลด Excel
+            </button>
             {canCompute && (
               <button
                 onClick={openCompute}

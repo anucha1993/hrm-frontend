@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Topbar from "@/components/Topbar";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiDownload } from "@/lib/api";
 import type { DailyEntry } from "@/lib/leave";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Download } from "lucide-react";
 
 interface DailyResponse {
   employee: {
@@ -46,6 +46,20 @@ export default function EmployeeDailySummaryPage() {
   const [month, setMonth] = useState(search?.get("month") ?? defaultMonth);
   const [data, setData] = useState<DailyResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadExcel() {
+    setDownloading(true);
+    try {
+      await apiDownload(
+        `/attendance/summary/${id}/daily/export`,
+        `attendance-daily-${data?.employee.employee_code ?? id}-${month}.xlsx`,
+        { params: { month } },
+      );
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -92,14 +106,24 @@ export default function EmployeeDailySummaryPage() {
               </div>
             </div>
           )}
-          <div className="ml-auto">
-            <label className="block text-xs font-medium text-muted mb-1">เดือน</label>
-            <input
-              type="month"
-              className="payroll-input"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-            />
+          <div className="ml-auto flex items-end gap-3">
+            <button
+              onClick={downloadExcel}
+              disabled={downloading || loading || !data}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+            >
+              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              ดาวน์โหลด Excel
+            </button>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">เดือน</label>
+              <input
+                type="month"
+                className="payroll-input"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+              />
+            </div>
           </div>
         </div>
 

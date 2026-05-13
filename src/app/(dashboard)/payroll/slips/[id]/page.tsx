@@ -36,7 +36,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-interface FullSlip extends PayrollSlip {
+interface FullSlip extends Omit<PayrollSlip, "period"> {
   items?: PayrollSlipItem[];
   approvals?: PayrollApproval[];
   ot_sessions?: { id: number; name: string; work_date: string; pivot?: { hours: string; amount: string } }[];

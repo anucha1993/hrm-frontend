@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, apiDownload, ApiError } from "@/lib/api";
 import { fmtDate } from "@/lib/payroll";
 import {
   LEAVE_STATUS_COLOR,
@@ -12,7 +12,7 @@ import {
   type LeaveRequest,
   type LeaveType,
 } from "@/lib/leave";
-import { Plus, X, Loader2, AlertCircle, CalendarOff, Trash2 } from "lucide-react";
+import { Plus, X, Loader2, AlertCircle, CalendarOff, Trash2, Download } from "lucide-react";
 
 type Form = {
   leave_type_id: number | "";
@@ -164,12 +164,23 @@ export default function MyLeavePage() {
 
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">ประวัติคำขอลา</h3>
-          <button
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold hover:from-primary-600 hover:to-accent-600"
-          >
-            <Plus className="w-4 h-4" /> ยื่นใบลา
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                try { await apiDownload(`/leave/requests/export`, `my-leave-requests.xlsx`, { params: { mine: 1 } }); }
+                catch (e) { alert(e instanceof Error ? e.message : "ดาวน์โหลดไม่สำเร็จ"); }
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700"
+            >
+              <Download className="w-4 h-4" /> ดาวน์โหลด Excel
+            </button>
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold hover:from-primary-600 hover:to-accent-600"
+            >
+              <Plus className="w-4 h-4" /> ยื่นใบลา
+            </button>
+          </div>
         </div>
 
         {loading ? (

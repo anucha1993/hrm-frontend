@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Badge from "@/components/Badge";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, apiDownload, ApiError } from "@/lib/api";
 import { Attendance, AttendanceAuditLog, Employee, WorkShift, OfficeLocation } from "@/lib/types";
-import { LogIn, LogOut, MapPin, AlertTriangle, Image as ImageIcon, X, Filter, RefreshCw, Plus, Edit2, Trash2, History, Loader2, Wand2 } from "lucide-react";
+import { LogIn, LogOut, MapPin, AlertTriangle, Image as ImageIcon, X, Filter, RefreshCw, Plus, Edit2, Trash2, History, Loader2, Wand2, Download } from "lucide-react";
 
 type Paginated<T> = {
   data: T[];
@@ -220,6 +220,21 @@ export default function AttendanceManagePage() {
           <p className="text-sm text-muted">ดูภาพรวมการลงเวลาเข้า-ออกของพนักงานทั้งหมด</p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              try {
+                await apiDownload(`/attendance/export`, `attendance-history-${from}-to-${to}.xlsx`, {
+                  params: { from, to, employee_id: employeeId || undefined, type: type || undefined },
+                });
+              } catch (e) {
+                alert(e instanceof Error ? e.message : "ดาวน์โหลดไม่สำเร็จ");
+              }
+            }}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Excel</span>
+          </button>
           <button
             onClick={openCreate}
             className="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-lg text-sm font-semibold hover:from-primary-600 hover:to-accent-600"

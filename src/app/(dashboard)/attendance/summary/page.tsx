@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Topbar from "@/components/Topbar";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiDownload } from "@/lib/api";
 import type { SummaryResponse, SummaryRow } from "@/lib/leave";
-import { Loader2, BarChart3, Filter } from "lucide-react";
+import { Loader2, BarChart3, Filter, Download } from "lucide-react";
 
 interface Department {
   id: number;
@@ -20,6 +20,20 @@ export default function AttendanceSummaryPage() {
   const [data, setData] = useState<SummaryResponse | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadExcel() {
+    setDownloading(true);
+    try {
+      await apiDownload(
+        `/attendance/summary/export`,
+        `attendance-summary-${month}${departmentId ? `-dept${departmentId}` : ""}.xlsx`,
+        { params: { month, department_id: departmentId || undefined } },
+      );
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -83,9 +97,19 @@ export default function AttendanceSummaryPage() {
               ))}
             </select>
           </div>
-          <div className="ml-auto text-xs text-muted flex items-center gap-1">
-            <Filter className="w-4 h-4" />
-            {data && `ช่วง ${data.period.start} – ${data.period.end} (${data.period.total_days} วัน)`}
+          <div className="ml-auto flex items-center gap-3">
+            <button
+              onClick={downloadExcel}
+              disabled={downloading || loading || !data}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+            >
+              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              ดาวน์โหลด Excel
+            </button>
+            <div className="text-xs text-muted flex items-center gap-1">
+              <Filter className="w-4 h-4" />
+              {data && `ช่วง ${data.period.start} – ${data.period.end} (${data.period.total_days} วัน)`}
+            </div>
           </div>
         </div>
 

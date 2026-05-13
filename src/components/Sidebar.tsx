@@ -18,6 +18,7 @@ import {
   LogOut,
   Briefcase,
   CalendarOff,
+  Factory,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -109,8 +110,13 @@ const menuItems: MenuItem[] = [
       { label: "โปรไฟล์ค่าจ้าง", href: "/payroll/profiles", permission: "payroll.config" },
       { label: "ตั้งค่าภาษี", href: "/payroll/tax", permission: "payroll.config" },
       { label: "เบี้ย/หักรายการ", href: "/payroll/components", permission: "payroll.config" },
-      { label: "ค่าจ้างรายสินค้า", href: "/product-wages", permission: "payroll.view" },
     ],
+  },
+  {
+    label: "กำหนดการจ่ายการผลิต",
+    href: "/payroll/production-rates",
+    icon: Factory,
+    permission: ["payroll.view", "payroll.config"],
   },
   {
     label: "อนุมัติเงินเดือน",
@@ -163,6 +169,13 @@ export default function Sidebar() {
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
+  const isItemActive = (item: MenuItem) => {
+    if (item.children && item.children.length > 0) {
+      return item.children.some((c) => pathname === c.href);
+    }
+    return isActive(item.href);
+  };
+
   const can = (perm?: string | string[]) => !perm || hasPermission(perm);
 
   // Employee role: จำกัดให้เห็นเฉพาะเมนู "ลงเวลางาน"
@@ -201,7 +214,7 @@ export default function Sidebar() {
         <ul className="space-y-1">
           {visibleItems.map((item) => {
             const Icon = item.icon;
-            const active = isActive(item.href);
+            const active = isItemActive(item);
             const expanded = expandedItems.includes(item.label);
             const hasChildren = item.children && item.children.length > 0;
 

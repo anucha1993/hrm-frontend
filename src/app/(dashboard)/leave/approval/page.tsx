@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, apiDownload, ApiError } from "@/lib/api";
 import { fmtDate } from "@/lib/payroll";
 import {
   LEAVE_STATUS_COLOR,
@@ -11,7 +11,7 @@ import {
   type LeaveRequest,
   type LeaveStatus,
 } from "@/lib/leave";
-import { Loader2, Check, X, AlertCircle, FileText } from "lucide-react";
+import { Loader2, Check, X, AlertCircle, FileText, Download } from "lucide-react";
 
 const TABS: { key: LeaveStatus; label: string }[] = [
   { key: "pending", label: "รออนุมัติ" },
@@ -26,6 +26,18 @@ export default function LeaveApprovalPage() {
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [detail, setDetail] = useState<LeaveRequest | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadExcel() {
+    setDownloading(true);
+    try {
+      await apiDownload(`/leave/requests/export`, `leave-requests-${tab}.xlsx`, {
+        params: { status: tab },
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -95,6 +107,14 @@ export default function LeaveApprovalPage() {
               {t.label}
             </button>
           ))}
+          <button
+            onClick={downloadExcel}
+            disabled={downloading || loading}
+            className="ml-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 mb-2"
+          >
+            {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            ดาวน์โหลด Excel
+          </button>
         </div>
 
         {err && (
