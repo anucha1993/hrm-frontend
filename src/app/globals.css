@@ -55,3 +55,12 @@ body {
   border-color: var(--color-primary-500);
   box-shadow: 0 0 0 3px rgb(249 115 22 / 0.1);
 }
+
+/* Print styles for daily work order */
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 16px; }
+  .no-print { display: none !important; }
+  @page { size: A4; margin: 12mm; }
+}

@@ -117,6 +117,11 @@ const menuItems: MenuItem[] = [
     href: "/payroll/production-rates",
     icon: Factory,
     permission: ["payroll.view", "payroll.config"],
+    children: [
+      { label: "เรทค่าจ้างการผลิต", href: "/payroll/production-rates", permission: "payroll.view" },
+      { label: "ใบจ่ายงาน", href: "/payroll/work-orders", permission: "payroll.view" },
+      { label: "นำเข้า Payroll", href: "/payroll/work-orders/import", permission: "payroll.config" },
+    ],
   },
   {
     label: "อนุมัติเงินเดือน",
