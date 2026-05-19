@@ -6,7 +6,7 @@ import { Loader2, Plus, Trash2, Save, AlertCircle, Calendar, Pencil, Printer, X 
 import Topbar from "@/components/Topbar";
 import { apiFetch, ApiError } from "@/lib/api";
 import { fmtMoney, fmtDate } from "@/lib/payroll";
-import WorkOrderForm, { type WorkOrderFormInit, type ItemRow, type MemberRow } from "../WorkOrderForm";
+import WorkOrderForm, { type WorkOrderFormInit, type ItemRow, type MemberRow, type ExtraRow } from "../WorkOrderForm";
 
 type RateItemBrief = { id: number; code: string; name: string; unit: string; work_type: string };
 type EmployeeBrief = { id: number; employee_code: string; first_name: string; last_name: string };
@@ -49,6 +49,7 @@ type WorkOrderDetail = {
     rate_item: RateItemBrief | null;
   }>;
   members: Array<{ id: number; employee_id: number; role: string | null; note: string | null; employee: EmployeeBrief | null }>;
+  extra_items?: Array<{ id: number; name: string; unit: string | null; qty: string; rate: string; amount: string; note: string | null }>;
   daily_entries: DailyEntry[];
 };
 
@@ -104,6 +105,14 @@ export default function EditWorkOrderPage() {
       employee_id: m.employee_id,
       role: m.role ?? "",
       note: m.note ?? "",
+    })),
+    extras: (data.extra_items ?? []).map<ExtraRow>((e) => ({
+      id: e.id,
+      name: e.name,
+      unit: e.unit ?? "",
+      qty: String(e.qty),
+      rate: String(e.rate),
+      note: e.note ?? "",
     })),
   };
 
@@ -497,6 +506,37 @@ function PrintDailyOrderModal({ wo, entry, onClose }: { wo: WorkOrderDetail; ent
               })}
             </tbody>
           </table>
+
+          {/* รายการจ่ายเพิ่มเติม */}
+          {wo.extra_items && wo.extra_items.length > 0 && (
+            <>
+              <div className="font-semibold mb-1">รายการจ่ายเพิ่มเติม</div>
+              <table className="w-full border border-gray-700 mb-4">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="border border-gray-700 px-2 py-1 w-10">#</th>
+                    <th className="border border-gray-700 px-2 py-1 text-left">รายการ</th>
+                    <th className="border border-gray-700 px-2 py-1 w-20">หน่วย</th>
+                    <th className="border border-gray-700 px-2 py-1 w-24">จำนวน</th>
+                    <th className="border border-gray-700 px-2 py-1 w-28">ราคา/หน่วย</th>
+                    <th className="border border-gray-700 px-2 py-1 w-28">รวมเงิน</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {wo.extra_items.map((ex, idx) => (
+                    <tr key={ex.id}>
+                      <td className="border border-gray-700 px-2 py-1 text-center">{idx + 1}</td>
+                      <td className="border border-gray-700 px-2 py-1">{ex.name}</td>
+                      <td className="border border-gray-700 px-2 py-1 text-center">{ex.unit ?? "-"}</td>
+                      <td className="border border-gray-700 px-2 py-1 text-right">{Number(ex.qty)}</td>
+                      <td className="border border-gray-700 px-2 py-1 text-right">{fmtMoney(ex.rate)}</td>
+                      <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{fmtMoney(ex.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
 
           {/* ผู้รับงาน */}
           <div className="font-semibold mb-1">ผู้รับงาน (สมาชิกทีม)</div>

@@ -8,7 +8,7 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { fmtMoney } from "@/lib/payroll";
 import {
   Plus, Trash2, Loader2, AlertCircle, ArrowLeft, Save, Users, Crown,
-  Pencil, RotateCcw, CalendarRange,
+  Pencil, RotateCcw, CalendarRange, Coins,
 } from "lucide-react";
 
 type RateItem = {
@@ -46,6 +46,15 @@ export type MemberRow = {
   note: string;
 };
 
+export type ExtraRow = {
+  id?: number;
+  name: string;
+  unit: string;
+  qty: string;
+  rate: string;
+  note: string;
+};
+
 export type WorkOrderFormInit = {
   id?: number;
   code?: string;
@@ -58,6 +67,7 @@ export type WorkOrderFormInit = {
   status?: "draft" | "in_progress" | "completed" | "paid";
   items: ItemRow[];
   members: MemberRow[];
+  extras?: ExtraRow[];
 };
 
 const UNIT_LABEL = { raft: "แพ", meter: "เมตร" } as const;
@@ -75,6 +85,7 @@ export const blankForm: WorkOrderFormInit = {
   note: "",
   items: [],
   members: [],
+  extras: [],
 };
 
 // คำนวณช่วงวันที่ตาม period_type (อ้างอิงวันปัจจุบัน)
@@ -126,7 +137,7 @@ export default function WorkOrderForm({
   isEdit?: boolean;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState<WorkOrderFormInit>(initial);
+  const [form, setForm] = useState<WorkOrderFormInit>({ ...initial, extras: initial.extras ?? [] });
   const [rateItems, setRateItems] = useState<RateItem[]>([]);
   const [employees, setEmployees] = useState<EmployeeBrief[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -245,6 +256,27 @@ export default function WorkOrderForm({
     setForm((f) => ({ ...f, members: f.members.map((m, i) => (i === idx ? { ...m, ...patch } : m)) }));
   }
 
+  // ---------- extras (รายการจ่ายเพิ่มเติม) ----------
+  function addExtra() {
+    setForm((f) => ({
+      ...f,
+      extras: [...(f.extras ?? []), { name: "", unit: "", qty: "1", rate: "0", note: "" }],
+    }));
+  }
+  function removeExtra(idx: number) {
+    setForm((f) => ({ ...f, extras: (f.extras ?? []).filter((_, i) => i !== idx) }));
+  }
+  function updateExtra(idx: number, patch: Partial<ExtraRow>) {
+    setForm((f) => ({
+      ...f,
+      extras: (f.extras ?? []).map((e, i) => (i === idx ? { ...e, ...patch } : e)),
+    }));
+  }
+  const extrasTotal = useMemo(
+    () => (form.extras ?? []).reduce((s, e) => s + Number(e.qty || 0) * Number(e.rate || 0), 0),
+    [form.extras]
+  );
+
   async function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
     if (readOnly) return;
@@ -272,6 +304,15 @@ export default function WorkOrderForm({
         members: form.members
           .filter((m) => m.employee_id && m.employee_id !== form.team_leader_id)
           .map((m) => ({ employee_id: m.employee_id, role: m.role || null, note: m.note || null })),
+        extras: (form.extras ?? [])
+          .filter((e) => e.name.trim() !== "")
+          .map((e) => ({
+            name: e.name.trim(),
+            unit: e.unit || null,
+            qty: Number(e.qty || 0),
+            rate: Number(e.rate || 0),
+            note: e.note || null,
+          })),
       };
       if (isEdit && form.id) {
         await apiFetch(`/payroll/work-orders/${form.id}`, { method: "PUT", body: payload });
@@ -573,9 +614,89 @@ export default function WorkOrderForm({
           )}
           {isEdit && form.items.length > 0 && (
             <div className="px-4 py-3 border-t border-border bg-green-50/50 flex justify-between items-center">
-              <span className="text-sm font-medium">รวมค่าจ้างทั้งใบ (จ่ายหัวหน้าทีม)</span>
+              <span className="text-sm font-medium">รวมค่าจ้างจากรายการผลิต</span>
               <span className="text-lg font-bold text-green-700">{fmtMoney(grandTotal)} บาท</span>
             </div>
+          )}
+        </div>
+
+        {/* Extras — รายการจ่ายเพิ่มเติม */}
+        <div className="bg-white rounded-xl border border-border">
+          <div className="px-4 py-3 border-b border-border flex justify-between items-center">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Coins className="w-4 h-4 text-amber-600" /> รายการจ่ายเพิ่มเติม ({(form.extras ?? []).length} รายการ)
+            </h3>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted">
+                รวม: <span className="font-bold text-amber-700">{fmtMoney(extrasTotal)}</span>
+              </span>
+              {!readOnly && (
+                <button type="button" onClick={addExtra}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border hover:bg-gray-50">
+                  <Plus className="w-3.5 h-3.5" /> เพิ่มรายการ
+                </button>
+              )}
+            </div>
+          </div>
+          {(form.extras ?? []).length === 0 ? (
+            <div className="p-6 text-center text-muted text-sm">— ไม่มีรายการเพิ่มเติม (เช่น หูแพแผ่นพื้น, ค่าขนส่ง ฯลฯ) —</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-border">
+                <tr className="text-left text-xs text-muted uppercase">
+                  <th className="px-3 py-2 w-10">#</th>
+                  <th className="px-3 py-2">รายการ *</th>
+                  <th className="px-3 py-2 w-24">หน่วย</th>
+                  <th className="px-3 py-2 w-24 text-right">จำนวน *</th>
+                  <th className="px-3 py-2 w-28 text-right">ราคา/หน่วย *</th>
+                  <th className="px-3 py-2 w-32 text-right">รวมเงิน</th>
+                  <th className="px-3 py-2">หมายเหตุ</th>
+                  <th className="px-3 py-2 w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(form.extras ?? []).map((e, idx) => {
+                  const lineAmount = Number(e.qty || 0) * Number(e.rate || 0);
+                  return (
+                    <tr key={idx} className="border-b border-border last:border-0">
+                      <td className="px-3 py-2 text-center text-xs text-muted">{idx + 1}</td>
+                      <td className="px-3 py-2">
+                        <input type="text" disabled={readOnly} className="payroll-input"
+                          placeholder="เช่น หูแพแผ่นพื้น"
+                          value={e.name} onChange={(ev) => updateExtra(idx, { name: ev.target.value })} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input type="text" disabled={readOnly} className="payroll-input"
+                          placeholder="แพ"
+                          value={e.unit} onChange={(ev) => updateExtra(idx, { unit: ev.target.value })} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input type="number" step="0.01" min="0" disabled={readOnly} className="payroll-input text-right"
+                          value={e.qty} onChange={(ev) => updateExtra(idx, { qty: ev.target.value })} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input type="number" step="0.01" min="0" disabled={readOnly} className="payroll-input text-right"
+                          value={e.rate} onChange={(ev) => updateExtra(idx, { rate: ev.target.value })} />
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-amber-700 tabular-nums">
+                        {fmtMoney(lineAmount)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <input type="text" disabled={readOnly} className="payroll-input"
+                          value={e.note} onChange={(ev) => updateExtra(idx, { note: ev.target.value })} />
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {!readOnly && (
+                          <button type="button" onClick={() => removeExtra(idx)} className="p-1 text-gray-400 hover:text-red-600">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </div>
 
@@ -646,6 +767,13 @@ export default function WorkOrderForm({
             </table>
           )}
         </div>
+
+        {isEdit && (form.items.length > 0 || (form.extras ?? []).length > 0) && (
+          <div className="bg-gradient-to-r from-green-50 to-amber-50 rounded-xl border-2 border-green-200 px-4 py-3 flex justify-between items-center">
+            <span className="text-sm font-semibold">รวมค่าจ้างทั้งใบ (จ่ายหัวหน้าทีม)</span>
+            <span className="text-xl font-bold text-green-700">{fmtMoney(grandTotal + extrasTotal)} บาท</span>
+          </div>
+        )}
 
         {err && (
           <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3 flex items-center gap-2">
