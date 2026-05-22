@@ -11,7 +11,6 @@ import {
   Calculator,
   CheckCircle,
   BarChart3,
-  Package,
   Shield,
   ChevronDown,
   ChevronRight,
@@ -50,12 +49,6 @@ const menuItems: MenuItem[] = [
     href: "/rules",
     icon: Shield,
     permission: "settings.view",
-  },
-  {
-    label: "ค่าจ้างรายสินค้า",
-    href: "/product-wages",
-    icon: Package,
-    permission: "payroll.view",
   },
   {
     label: "ลงเวลางาน",

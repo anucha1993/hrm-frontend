@@ -8,7 +8,7 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { fmtMoney } from "@/lib/payroll";
 import {
   Plus, Trash2, Loader2, AlertCircle, ArrowLeft, Save, Users, Crown,
-  Pencil, RotateCcw, CalendarRange, Coins,
+  Pencil, RotateCcw, CalendarRange, Coins, CheckCircle2,
 } from "lucide-react";
 
 type RateItem = {
@@ -141,6 +141,7 @@ export default function WorkOrderForm({
   const [rateItems, setRateItems] = useState<RateItem[]>([]);
   const [employees, setEmployees] = useState<EmployeeBrief[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingRates, setEditingRates] = useState<Set<number>>(new Set());
   const readOnly = form.status === "paid";
@@ -286,6 +287,7 @@ export default function WorkOrderForm({
 
     setSaving(true);
     setErr(null);
+    setSuccessMsg(null);
     try {
       const payload = {
         start_date: form.start_date,
@@ -316,18 +318,33 @@ export default function WorkOrderForm({
       };
       if (isEdit && form.id) {
         await apiFetch(`/payroll/work-orders/${form.id}`, { method: "PUT", body: payload });
+        setSuccessMsg("✔ บันทึกสำเร็จ");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        setTimeout(() => setSuccessMsg(null), 3000);
         router.refresh();
       } else {
         const res = await apiFetch<{ data: { id: number } }>("/payroll/work-orders", {
           method: "POST", body: payload,
         });
-        router.push(`/payroll/work-orders/${res.data.id}`);
+        setSuccessMsg("✔ สร้างใบงานสำเร็จ — กำลังไปยังหน้ารายละเอียด...");
+        setTimeout(() => router.push(`/payroll/work-orders/${res.data.id}`), 700);
       }
     } catch (ex: unknown) {
-      const msg = ex instanceof ApiError && typeof ex.data === "object" && ex.data
-        ? (ex.data as { message?: string }).message ?? ex.message
-        : ex instanceof Error ? ex.message : "บันทึกไม่สำเร็จ";
+      let msg = "บันทึกไม่สำเร็จ";
+      if (ex instanceof ApiError) {
+        const data = ex.data as { message?: string; errors?: Record<string, string[]> } | null;
+        const parts: string[] = [];
+        if (data?.message) parts.push(data.message);
+        if (data?.errors) {
+          Object.values(data.errors).forEach((arr) => arr.forEach((m) => parts.push("• " + m)));
+        }
+        msg = parts.length ? parts.join("\n") : ex.message;
+      } else if (ex instanceof Error) {
+        msg = ex.message;
+      }
       setErr(msg);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      alert(msg);
     } finally {
       setSaving(false);
     }
@@ -776,8 +793,14 @@ export default function WorkOrderForm({
         )}
 
         {err && (
-          <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" /> {err}
+          <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3 flex items-start gap-2 whitespace-pre-wrap">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /> <span>{err}</span>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="bg-green-50 text-green-700 text-sm rounded-lg p-3 flex items-center gap-2 border border-green-200">
+            <CheckCircle2 className="w-4 h-4" /> {successMsg}
           </div>
         )}
 

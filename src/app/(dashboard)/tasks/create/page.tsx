@@ -1,14 +1,19 @@
-import ComingSoon from "@/components/ComingSoon";
+"use client";
+
+import { ClipboardList } from "lucide-react";
+import Topbar from "@/components/Topbar";
+import TaskForm from "../TaskForm";
 
 export default function CreateTaskPage() {
   return (
-    <ComingSoon
-      title="สร้างงานใหม่"
-      todo={[
-        "ต้องสร้าง Model Task ก่อน",
-        "Form: ชื่องาน, รายละเอียด, ผู้รับผิดชอบ, ความสำคัญ, กำหนดส่ง, ไฟล์แนบ",
-        "API POST /tasks",
-      ]}
-    />
+    <>
+      <Topbar title="สร้างงานใหม่" />
+      <div className="p-6 space-y-4">
+        <h1 className="flex items-center gap-2 text-2xl font-semibold text-slate-800">
+          <ClipboardList className="h-7 w-7 text-indigo-600" /> สร้างงานใหม่
+        </h1>
+        <TaskForm mode="create" />
+      </div>
+    </>
   );
 }

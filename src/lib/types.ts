@@ -23,6 +23,7 @@ export type User = {
   is_active: boolean;
   role: Pick<Role, "id" | "name" | "display_name"> | null;
   permissions: string[];
+  employee_id?: number | null;
 };
 
 export type Paginated<T> = {
