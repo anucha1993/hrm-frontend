@@ -16,35 +16,28 @@ type EmpRow = {
   employee_code: string;
   employee_name: string;
   department: string | null;
-  tasks: number;
-  completed: number;
-  in_progress: number;
-  rejected: number;
-  avg_rating: number | null;
+  requests: number;
+  total_days: number;
+  by_type: Record<string, number>;
 };
 
 type Data = {
   range: { from: string; to: string };
-  totals: {
-    tasks: number;
-    completed: number;
-    in_progress: number;
-    avg_rating: number | null;
-  };
+  totals: { requests: number; total_days: number; employees: number };
+  leave_types: string[];
+  by_type: Array<{ leave_type: string; count: number; total_days: number }>;
   by_employee: EmpRow[];
 };
 
 function defaultRange() {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const from = new Date(now.getFullYear(), 0, 1);
+  const to = new Date(now.getFullYear(), 11, 31);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   return { from: iso(from), to: iso(to) };
 }
 
-type SortKey = "employee_code" | "tasks" | "completed" | "avg_rating";
-
-export default function ReportTasksPage() {
+export default function ReportLeavePage() {
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -52,15 +45,13 @@ export default function ReportTasksPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<SortKey>("tasks");
-  const [dir, setDir] = useState<"asc" | "desc">("desc");
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const r = await apiFetch<{ data: Data }>(
-        `/reports/tasks/summary?from=${from}&to=${to}`
+        `/reports/leave/summary?from=${from}&to=${to}`
       );
       setData(r.data);
     } catch (e) {
@@ -77,47 +68,18 @@ export default function ReportTasksPage() {
 
   const rows = useMemo(() => {
     if (!data) return [];
-    const filtered = data.by_employee.filter((r) =>
+    return data.by_employee.filter((r) =>
       !q
         ? true
         : r.employee_code.toLowerCase().includes(q.toLowerCase()) ||
           r.employee_name.toLowerCase().includes(q.toLowerCase()) ||
           (r.department ?? "").toLowerCase().includes(q.toLowerCase())
     );
-    return [...filtered].sort((a, b) => {
-      const av = a[sort];
-      const bv = b[sort];
-      if (typeof av === "number" && typeof bv === "number") {
-        return dir === "asc" ? av - bv : bv - av;
-      }
-      if (av === null) return 1;
-      if (bv === null) return -1;
-      return dir === "asc"
-        ? String(av).localeCompare(String(bv))
-        : String(bv).localeCompare(String(av));
-    });
-  }, [data, q, sort, dir]);
-
-  const toggleSort = (k: SortKey) => {
-    if (sort === k) setDir(dir === "asc" ? "desc" : "asc");
-    else {
-      setSort(k);
-      setDir("desc");
-    }
-  };
-
-  const SortTh = ({ k, label, align = "left" }: { k: SortKey; label: string; align?: "left" | "right" }) => (
-    <th
-      onClick={() => toggleSort(k)}
-      className={`cursor-pointer select-none px-3 py-2 ${align === "right" ? "text-right" : "text-left"} hover:bg-slate-100`}
-    >
-      {label} {sort === k ? (dir === "asc" ? "▲" : "▼") : ""}
-    </th>
-  );
+  }, [data, q]);
 
   return (
     <>
-      <Topbar title="รายงานงาน" />
+      <Topbar title="รายงานการลา" />
       <div className="p-6 space-y-4">
         <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div>
@@ -147,7 +109,7 @@ export default function ReportTasksPage() {
             ค้นหา
           </button>
           <button
-            onClick={() => downloadReport(`/reports/tasks/export?from=${from}&to=${to}`, `tasks-${from}-${to}.csv`)}
+            onClick={() => downloadReport(`/reports/leave/export?from=${from}&to=${to}`, `leave-${from}-${to}.csv`)}
             className="inline-flex items-center gap-2 rounded border border-emerald-600 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-100"
           >
             <Download className="h-4 w-4" /> CSV
@@ -177,47 +139,42 @@ export default function ReportTasksPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <StatCard label="งานทั้งหมด" value={formatNumber(data.totals.tasks)} />
+              <StatCard label="ใบลาที่อนุมัติ" value={formatNumber(data.totals.requests)} />
               <StatCard
-                label="ทำเสร็จแล้ว"
-                value={formatNumber(data.totals.completed)}
-                tone="positive"
-              />
-              <StatCard
-                label="กำลังทำ"
-                value={formatNumber(data.totals.in_progress)}
+                label="วันลารวม"
+                value={`${data.totals.total_days} วัน`}
                 tone="info"
               />
               <StatCard
-                label="คะแนนเฉลี่ย"
-                value={
-                  data.totals.avg_rating !== null
-                    ? `${data.totals.avg_rating} / 5`
-                    : "-"
-                }
-                tone="warning"
+                label="พนักงานที่ลา"
+                value={formatNumber(data.totals.employees)}
               />
             </div>
 
-            <ReportSection title="รายชื่อพนักงาน" description={`${rows.length} คน`}>
+            <ReportSection
+              title="รายชื่อพนักงาน"
+              description={`${rows.length} คน — แสดงวันลาแยกตามประเภท`}
+            >
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
-                      <SortTh k="employee_code" label="รหัส" />
+                      <th className="px-3 py-2 text-left">รหัส</th>
                       <th className="px-3 py-2 text-left">ชื่อ-นามสกุล</th>
                       <th className="px-3 py-2 text-left">แผนก</th>
-                      <SortTh k="tasks" label="ทั้งหมด" align="right" />
-                      <SortTh k="completed" label="เสร็จ" align="right" />
-                      <th className="px-3 py-2 text-right">กำลังทำ</th>
-                      <th className="px-3 py-2 text-right">ปฏิเสธ</th>
-                      <SortTh k="avg_rating" label="คะแนนเฉลี่ย" align="right" />
+                      <th className="px-3 py-2 text-right">จำนวนใบ</th>
+                      {data.leave_types.map((t) => (
+                        <th key={t} className="px-3 py-2 text-right whitespace-nowrap">
+                          {t}
+                        </th>
+                      ))}
+                      <th className="px-3 py-2 text-right font-bold">รวม</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                        <td colSpan={5 + data.leave_types.length} className="px-3 py-6 text-center text-slate-400">
                           ไม่พบข้อมูล
                         </td>
                       </tr>
@@ -227,18 +184,14 @@ export default function ReportTasksPage() {
                           <td className="px-3 py-2 font-mono text-xs">{r.employee_code}</td>
                           <td className="px-3 py-2">{r.employee_name}</td>
                           <td className="px-3 py-2 text-slate-600">{r.department ?? "-"}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{r.tasks}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
-                            {r.completed}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-sky-700">
-                            {r.in_progress}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-rose-600">
-                            {r.rejected}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums font-semibold">
-                            {r.avg_rating !== null ? `${r.avg_rating} / 5` : "-"}
+                          <td className="px-3 py-2 text-right tabular-nums">{r.requests}</td>
+                          {data.leave_types.map((t) => (
+                            <td key={t} className="px-3 py-2 text-right tabular-nums">
+                              {r.by_type[t] ? r.by_type[t] : "-"}
+                            </td>
+                          ))}
+                          <td className="px-3 py-2 text-right tabular-nums font-semibold text-indigo-700">
+                            {r.total_days}
                           </td>
                         </tr>
                       ))

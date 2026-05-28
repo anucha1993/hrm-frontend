@@ -9,6 +9,7 @@ import {
   StatCard,
   downloadReport,
   formatNumber,
+  formatTHB,
 } from "@/components/reports/ReportPrimitives";
 
 type EmpRow = {
@@ -16,21 +17,14 @@ type EmpRow = {
   employee_code: string;
   employee_name: string;
   department: string | null;
-  tasks: number;
-  completed: number;
-  in_progress: number;
-  rejected: number;
-  avg_rating: number | null;
+  sessions: number;
+  hours: number;
+  amount: number;
 };
 
 type Data = {
   range: { from: string; to: string };
-  totals: {
-    tasks: number;
-    completed: number;
-    in_progress: number;
-    avg_rating: number | null;
-  };
+  totals: { records: number; total_hours: number; total_amount: number };
   by_employee: EmpRow[];
 };
 
@@ -42,9 +36,9 @@ function defaultRange() {
   return { from: iso(from), to: iso(to) };
 }
 
-type SortKey = "employee_code" | "tasks" | "completed" | "avg_rating";
+type SortKey = "employee_code" | "sessions" | "hours" | "amount";
 
-export default function ReportTasksPage() {
+export default function ReportOtPage() {
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -52,7 +46,7 @@ export default function ReportTasksPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<SortKey>("tasks");
+  const [sort, setSort] = useState<SortKey>("hours");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
 
   const load = useCallback(async () => {
@@ -60,7 +54,7 @@ export default function ReportTasksPage() {
     setError(null);
     try {
       const r = await apiFetch<{ data: Data }>(
-        `/reports/tasks/summary?from=${from}&to=${to}`
+        `/reports/ot/summary?from=${from}&to=${to}`
       );
       setData(r.data);
     } catch (e) {
@@ -90,8 +84,6 @@ export default function ReportTasksPage() {
       if (typeof av === "number" && typeof bv === "number") {
         return dir === "asc" ? av - bv : bv - av;
       }
-      if (av === null) return 1;
-      if (bv === null) return -1;
       return dir === "asc"
         ? String(av).localeCompare(String(bv))
         : String(bv).localeCompare(String(av));
@@ -117,7 +109,7 @@ export default function ReportTasksPage() {
 
   return (
     <>
-      <Topbar title="รายงานงาน" />
+      <Topbar title="รายงาน OT" />
       <div className="p-6 space-y-4">
         <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div>
@@ -147,7 +139,7 @@ export default function ReportTasksPage() {
             ค้นหา
           </button>
           <button
-            onClick={() => downloadReport(`/reports/tasks/export?from=${from}&to=${to}`, `tasks-${from}-${to}.csv`)}
+            onClick={() => downloadReport(`/reports/ot/export?from=${from}&to=${to}`, `ot-${from}-${to}.csv`)}
             className="inline-flex items-center gap-2 rounded border border-emerald-600 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-100"
           >
             <Download className="h-4 w-4" /> CSV
@@ -176,25 +168,16 @@ export default function ReportTasksPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <StatCard label="งานทั้งหมด" value={formatNumber(data.totals.tasks)} />
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              <StatCard label="รายการ OT" value={formatNumber(data.totals.records)} />
               <StatCard
-                label="ทำเสร็จแล้ว"
-                value={formatNumber(data.totals.completed)}
-                tone="positive"
-              />
-              <StatCard
-                label="กำลังทำ"
-                value={formatNumber(data.totals.in_progress)}
+                label="ชั่วโมงรวม"
+                value={`${formatNumber(data.totals.total_hours, 2)} ชม.`}
                 tone="info"
               />
               <StatCard
-                label="คะแนนเฉลี่ย"
-                value={
-                  data.totals.avg_rating !== null
-                    ? `${data.totals.avg_rating} / 5`
-                    : "-"
-                }
+                label="ค่า OT รวม"
+                value={formatTHB(data.totals.total_amount)}
                 tone="warning"
               />
             </div>
@@ -207,17 +190,15 @@ export default function ReportTasksPage() {
                       <SortTh k="employee_code" label="รหัส" />
                       <th className="px-3 py-2 text-left">ชื่อ-นามสกุล</th>
                       <th className="px-3 py-2 text-left">แผนก</th>
-                      <SortTh k="tasks" label="ทั้งหมด" align="right" />
-                      <SortTh k="completed" label="เสร็จ" align="right" />
-                      <th className="px-3 py-2 text-right">กำลังทำ</th>
-                      <th className="px-3 py-2 text-right">ปฏิเสธ</th>
-                      <SortTh k="avg_rating" label="คะแนนเฉลี่ย" align="right" />
+                      <SortTh k="sessions" label="ครั้ง" align="right" />
+                      <SortTh k="hours" label="ชั่วโมง" align="right" />
+                      <SortTh k="amount" label="ค่า OT" align="right" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                        <td colSpan={6} className="px-3 py-6 text-center text-slate-400">
                           ไม่พบข้อมูล
                         </td>
                       </tr>
@@ -227,18 +208,12 @@ export default function ReportTasksPage() {
                           <td className="px-3 py-2 font-mono text-xs">{r.employee_code}</td>
                           <td className="px-3 py-2">{r.employee_name}</td>
                           <td className="px-3 py-2 text-slate-600">{r.department ?? "-"}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{r.tasks}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
-                            {r.completed}
+                          <td className="px-3 py-2 text-right tabular-nums">{r.sessions}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {formatNumber(r.hours, 2)}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-sky-700">
-                            {r.in_progress}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-rose-600">
-                            {r.rejected}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums font-semibold">
-                            {r.avg_rating !== null ? `${r.avg_rating} / 5` : "-"}
+                          <td className="px-3 py-2 text-right tabular-nums font-semibold text-amber-700">
+                            {formatTHB(r.amount)}
                           </td>
                         </tr>
                       ))

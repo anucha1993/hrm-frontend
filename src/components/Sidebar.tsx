@@ -130,6 +130,8 @@ const menuItems: MenuItem[] = [
     children: [
       { label: "รายงานพนักงาน", href: "/reports/employees", permission: "reports.view" },
       { label: "รายงานเวลางาน", href: "/reports/attendance", permission: "reports.view" },
+      { label: "รายงานการลา", href: "/reports/leave", permission: "reports.view" },
+      { label: "รายงาน OT", href: "/reports/ot", permission: "reports.view" },
       { label: "รายงานเงินเดือน", href: "/reports/payroll", permission: "reports.view" },
       { label: "รายงานงาน", href: "/reports/tasks", permission: "reports.view" },
     ],
