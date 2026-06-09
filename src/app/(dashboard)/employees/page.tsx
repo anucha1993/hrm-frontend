@@ -3,11 +3,12 @@
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
 import Link from "next/link";
-import { Plus, Search, Edit2, Trash2, Loader2 } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Loader2, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Department, Employee, EmployeeStatus, EmploymentType, Paginated } from "@/lib/types";
+import EmployeeImportModal from "@/components/employees/EmployeeImportModal";
 
 const STATUS_LABEL: Record<EmployeeStatus, { label: string; variant: "success" | "warning" | "danger" | "default" }> = {
   active: { label: "ทำงาน", variant: "success" },
@@ -31,6 +32,7 @@ export default function EmployeesPage() {
   const [employmentTypeId, setEmploymentTypeId] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,14 +77,28 @@ export default function EmployeesPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <h3 className="text-lg font-semibold text-foreground">รายชื่อพนักงาน</h3>
           {canCreate && (
-            <Link
-              href="/employees/create"
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold"
-            >
-              <Plus className="w-4 h-4" /> เพิ่มพนักงาน
-            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setImportOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-white text-sm font-semibold text-foreground hover:bg-surface"
+              >
+                <Upload className="w-4 h-4" /> นำเข้าจาก Excel
+              </button>
+              <Link
+                href="/employees/create"
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold"
+              >
+                <Plus className="w-4 h-4" /> เพิ่มพนักงาน
+              </Link>
+            </div>
           )}
         </div>
+
+        <EmployeeImportModal
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          onSuccess={load}
+        />
 
         {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
 

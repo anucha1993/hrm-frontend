@@ -34,6 +34,8 @@ import {
   Loader2,
   AlertCircle,
   Trash2,
+  Receipt,
+  RotateCcw,
 } from "lucide-react";
 
 interface FullSlip extends Omit<PayrollSlip, "period"> {
@@ -52,6 +54,47 @@ export default function SlipDetailPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [depositPreview, setDepositPreview] = useState<{ count: number; total: number } | null>(null);
+
+  async function loadDepositPreview() {
+    try {
+      const res = await apiFetch<{ data: { id: number }[]; total: number }>(
+        `/goods-deposits/preview-for-payslip/${id}`
+      );
+      setDepositPreview({ count: res.data.length, total: res.total });
+    } catch {
+      setDepositPreview(null);
+    }
+  }
+
+  async function applyDeposits() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await apiFetch(`/goods-deposits/apply-to-payslip/${id}`, { method: "POST" });
+      await load();
+      await loadDepositPreview();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "ตัดยอดไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeDeposits() {
+    if (!confirm("ยกเลิกการตัดยอดใบมัดจำออกจากสลิปนี้?")) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await apiFetch(`/goods-deposits/revoke-from-payslip/${id}`, { method: "POST" });
+      await load();
+      await loadDepositPreview();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "ยกเลิกไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -64,7 +107,10 @@ export default function SlipDetailPage() {
   }
 
   useEffect(() => {
-    if (id) load();
+    if (id) {
+      load();
+      loadDepositPreview();
+    }
   }, [id]);
 
   async function action(verb: string, body: Record<string, unknown> = {}) {
@@ -243,6 +289,40 @@ export default function SlipDetailPage() {
         <ItemSection title="รายการหัก (Deductions)" items={deductions} />
         <ItemSection title="ประกันสังคม" items={ssfItems} />
         <ItemSection title="ภาษี" items={taxItems} />
+
+        {/* Goods Deposits panel */}
+        {(status === "draft" || status === "computed") && canCompute && (
+          <div className="bg-white rounded-xl border border-border p-5">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-amber-600" />
+                <h3 className="font-semibold">ใบมัดจำของใช้ทั่วไปในงวดนี้</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {depositPreview && depositPreview.count > 0 && (
+                  <ActionBtn onClick={applyDeposits} busy={busy} variant="success">
+                    <Check className="w-4 h-4" /> ตัดยอด {depositPreview.count} ใบ (
+                    {fmtMoney(depositPreview.total)})
+                  </ActionBtn>
+                )}
+                {deductions.some((d) => d.code === "GOODS_DEPOSIT") && (
+                  <ActionBtn onClick={revokeDeposits} busy={busy} variant="danger">
+                    <RotateCcw className="w-4 h-4" /> ยกเลิกการตัดยอด
+                  </ActionBtn>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-muted mt-2">
+              {depositPreview === null
+                ? "กำลังตรวจสอบ..."
+                : depositPreview.count === 0 && !deductions.some((d) => d.code === "GOODS_DEPOSIT")
+                  ? "ไม่มีใบมัดจำที่รอตัดยอดในงวดนี้"
+                  : depositPreview.count === 0
+                    ? "ตัดยอดไปแล้ว หากต้องการยกเลิกกดปุ่มยกเลิกอยู่ขวา"
+                    : `พบ${depositPreview.count} ใบรอตัดยอด รวม ${fmtMoney(depositPreview.total)} บาท`}
+            </p>
+          </div>
+        )}
 
         {/* OT Sessions */}
         {(slip.ot_sessions ?? []).length > 0 && (

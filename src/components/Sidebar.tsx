@@ -18,6 +18,7 @@ import {
   Briefcase,
   CalendarOff,
   Factory,
+  Receipt,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -123,6 +124,12 @@ const menuItems: MenuItem[] = [
     permission: ["payroll.approve", "payroll.approve_l1", "payroll.approve_l2", "payroll.pay"],
   },
   {
+    label: "ใบมัดจำของใช้ทั่วไป",
+    href: "/goods-deposits",
+    icon: Receipt,
+    permission: "goods_deposits.view",
+  },
+  {
     label: "รายงาน",
     href: "/reports",
     icon: BarChart3,
@@ -195,7 +202,7 @@ export default function Sidebar() {
     .filter((item): item is MenuItem => item !== null);
 
   return (
-    <aside className="w-64 bg-gradient-to-b from-primary-700 to-accent-800 text-white flex flex-col min-h-screen fixed left-0 top-0 z-30">
+    <aside className="w-64 bg-gradient-to-b from-primary-700 to-accent-800 text-white flex flex-col h-screen fixed left-0 top-0 z-30">
       {/* Logo */}
       <div className="px-6 py-5 border-b border-white/10">
         <Link href="/dashboard" className="flex items-center gap-3">

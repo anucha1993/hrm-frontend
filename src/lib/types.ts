@@ -269,3 +269,44 @@ export type TodayStatus = {
   shift: WorkShift | null;
   office_locations?: OfficeLocation[];
 };
+
+/* ===================== Goods Deposit (ใบมัดจำของใช้ทั่วไป) ===================== */
+export type GoodsDepositStatus = "pending" | "deducted" | "cancelled" | "waived";
+
+export type GoodsDepositItem = {
+  id: number;
+  deposit_slip_id: number;
+  item_name: string;
+  qty: string;
+  unit_price: string;
+  amount: string;
+  note?: string | null;
+  order: number;
+};
+
+export type GoodsDepositSlip = {
+  id: number;
+  slip_no: string;
+  employee_id: number;
+  deposit_date: string;
+  total_amount: string;
+  status: GoodsDepositStatus;
+  payroll_period_id: number | null;
+  payslip_id: number | null;
+  deducted_at: string | null;
+  created_by: number | null;
+  note?: string | null;
+  created_at: string;
+  updated_at: string;
+  employee?: {
+    id: number;
+    employee_code: string;
+    first_name: string;
+    last_name: string;
+  };
+  items?: GoodsDepositItem[];
+  payroll_period?: { id: number; name: string; code: string } | null;
+  payslip?: { id: number; slip_no: string } | null;
+  creator?: { id: number; name: string } | null;
+};
+

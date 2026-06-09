@@ -12,6 +12,7 @@ const PROTECTED_PREFIXES = [
   "/payroll-approval",
   "/reports",
   "/payslips",
+  "/goods-deposits",
   "/settings",
 ];
 
