@@ -31,25 +31,34 @@ export default function EmployeesPage() {
   const [departmentId, setDepartmentId] = useState<string>("");
   const [employmentTypeId, setEmploymentTypeId] = useState<string>("");
   const [status, setStatus] = useState<string>("");
+  const [nationality, setNationality] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ per_page: "50" });
+      const params = new URLSearchParams({ per_page: "50", page: String(page) });
       if (search) params.set("search", search);
       if (departmentId) params.set("department_id", departmentId);
       if (employmentTypeId) params.set("employment_type_id", employmentTypeId);
       if (status) params.set("status", status);
+      if (nationality) params.set("nationality", nationality);
       const res = await apiFetch<{ data: Paginated<Employee> }>(`/employees?${params.toString()}`);
       setItems(res.data.data);
+      setMeta({
+        current_page: res.data.current_page,
+        last_page: res.data.last_page,
+        total: res.data.total,
+      });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
       setLoading(false);
     }
-  }, [search, departmentId, employmentTypeId, status]);
+  }, [search, departmentId, employmentTypeId, status, nationality, page]);
 
   useEffect(() => {
     apiFetch<{ data: Department[] }>("/departments").then((r) => setDepartments(r.data)).catch(() => undefined);
@@ -102,20 +111,26 @@ export default function EmployeesPage() {
 
         {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               placeholder="ค้นหาชื่อ, รหัส, เลขบัตร..."
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border text-sm bg-white"
             />
           </div>
           <select
             value={departmentId}
-            onChange={(e) => setDepartmentId(e.target.value)}
+            onChange={(e) => {
+              setDepartmentId(e.target.value);
+              setPage(1);
+            }}
             className="px-3 py-2.5 rounded-xl border border-border text-sm bg-white"
           >
             <option value="">ทุกแผนก</option>
@@ -127,7 +142,10 @@ export default function EmployeesPage() {
           </select>
           <select
             value={employmentTypeId}
-            onChange={(e) => setEmploymentTypeId(e.target.value)}
+            onChange={(e) => {
+              setEmploymentTypeId(e.target.value);
+              setPage(1);
+            }}
             className="px-3 py-2.5 rounded-xl border border-border text-sm bg-white"
           >
             <option value="">ทุกประเภทการจ้าง</option>
@@ -139,7 +157,10 @@ export default function EmployeesPage() {
           </select>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
             className="px-3 py-2.5 rounded-xl border border-border text-sm bg-white"
           >
             <option value="">ทุกสถานะ</option>
@@ -147,6 +168,18 @@ export default function EmployeesPage() {
             <option value="suspended">พักงาน</option>
             <option value="resigned">ลาออก</option>
             <option value="terminated">เลิกจ้าง</option>
+          </select>
+          <select
+            value={nationality}
+            onChange={(e) => {
+              setNationality(e.target.value);
+              setPage(1);
+            }}
+            className="px-3 py-2.5 rounded-xl border border-border text-sm bg-white"
+          >
+            <option value="">ทุกสัญชาติ</option>
+            <option value="thai">คนไทย</option>
+            <option value="foreign">ต่างด้าว</option>
           </select>
         </div>
 
@@ -188,6 +221,14 @@ export default function EmployeesPage() {
                               <div>
                                 <p className="text-sm font-medium text-foreground">{e.full_name}</p>
                                 {e.nickname && <p className="text-xs text-muted">({e.nickname})</p>}
+                                {e.labour_id && (
+                                  <span
+                                    className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                                    title={`Labour ID: ${e.labour_id}`}
+                                  >
+                                    ต่างด้าว #{e.labour_id}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -234,6 +275,34 @@ export default function EmployeesPage() {
             </div>
           )}
         </div>
+
+        {!loading && meta.total > 0 && (
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <p className="text-sm text-muted">
+              แสดง {items.length} จากทั้งหมด{" "}
+              <span className="font-semibold text-foreground">{meta.total}</span> คน
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={meta.current_page <= 1}
+                className="px-3 py-2 rounded-lg border border-border text-sm font-medium text-foreground bg-white hover:bg-surface disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ก่อนหน้า
+              </button>
+              <span className="px-3 py-2 text-sm text-muted">
+                หน้า {meta.current_page} / {meta.last_page}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
+                disabled={meta.current_page >= meta.last_page}
+                className="px-3 py-2 rounded-lg border border-border text-sm font-medium text-foreground bg-white hover:bg-surface disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ถัดไป
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

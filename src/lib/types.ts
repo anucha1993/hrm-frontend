@@ -85,6 +85,7 @@ export type Employee = {
   email?: string | null;
   address?: string | null;
   national_id: string;
+  labour_id?: number | null;
   marital_status?: string | null;
   religion?: string | null;
   education_level?: string | null;
