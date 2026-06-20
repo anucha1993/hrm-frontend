@@ -85,6 +85,16 @@ const empty: FormState = {
   note: "",
 };
 
+// ป้ายชื่อ/หน่วย ของช่องค่าจ้าง ตามประเภทการจ้าง (อิงรหัส code ของ EmploymentType)
+// PIECEWORK (จ้างตามชิ้นงาน) ไม่มีใน map → ซ่อนช่องค่าจ้าง (จ่ายตามเรทการผลิต)
+const SALARY_FIELD_BY_CODE: Record<string, { label: string; unit: string; placeholder: string }> = {
+  MONTHLY:  { label: "เงินเดือน", unit: "บาท/เดือน", placeholder: "เช่น 15000" },
+  DAILY:    { label: "ค่าจ้างรายวัน", unit: "บาท/วัน", placeholder: "เช่น 400" },
+  HOURLY:   { label: "ค่าจ้างรายชั่วโมง", unit: "บาท/ชม.", placeholder: "เช่น 60" },
+  CONTRACT: { label: "ค่าจ้างตามสัญญา", unit: "บาท", placeholder: "เช่น 30000" },
+  INTERN:   { label: "เบี้ยเลี้ยง/ค่าตอบแทน", unit: "บาท", placeholder: "เช่น 300" },
+};
+
 export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
   const router = useRouter();
   const { hasPermission } = useAuth();
@@ -222,6 +232,16 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
       </div>
     );
   }
+
+  // ช่องค่าจ้างปรับตามประเภทการจ้างที่เลือก
+  const selectedType = types.find((t) => String(t.id) === form.employment_type_id);
+  const typeCode = selectedType?.code ?? "";
+  const isPiecework = typeCode === "PIECEWORK";
+  const salaryField = SALARY_FIELD_BY_CODE[typeCode] ?? {
+    label: "เงินเดือนพื้นฐาน",
+    unit: "บาท",
+    placeholder: "",
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -366,7 +386,13 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
           <Field label="ประเภทการจ้าง">
             <select
               value={form.employment_type_id}
-              onChange={(e) => set("employment_type_id", e.target.value)}
+              onChange={(e) => {
+                const id = e.target.value;
+                set("employment_type_id", id);
+                // จ้างตามชิ้นงานไม่มีเงินเดือน/ค่าจ้างประจำ → ล้างค่า
+                const t = types.find((x) => String(x.id) === id);
+                if (t?.code === "PIECEWORK") set("base_salary", "");
+              }}
               className={input}
             >
               <option value="">-</option>
@@ -396,16 +422,30 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
               className={input}
             />
           </Field>
-          <Field label="เงินเดือนพื้นฐาน">
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.base_salary}
-              onChange={(e) => set("base_salary", e.target.value)}
-              className={input}
-            />
-          </Field>
+          {isPiecework ? (
+            <Field label="ค่าจ้าง">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 leading-relaxed">
+                จ้างตามชิ้นงาน (งานเหมา) — จ่ายตามเรทค่าจ้างการผลิต ไม่มีเงินเดือน/ค่าจ้างประจำ
+              </div>
+            </Field>
+          ) : (
+            <Field label={salaryField.label}>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.base_salary}
+                  onChange={(e) => set("base_salary", e.target.value)}
+                  placeholder={salaryField.placeholder}
+                  className={`${input} pr-16`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted pointer-events-none">
+                  {salaryField.unit}
+                </span>
+              </div>
+            </Field>
+          )}
           <Field label="สถานะ" required>
             <select
               value={form.status}

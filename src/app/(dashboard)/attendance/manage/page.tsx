@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import Badge from "@/components/Badge";
 import { apiFetch, apiDownload, ApiError } from "@/lib/api";
 import { Attendance, AttendanceAuditLog, Employee, WorkShift, OfficeLocation } from "@/lib/types";
-import { LogIn, LogOut, MapPin, AlertTriangle, Image as ImageIcon, X, Filter, RefreshCw, Plus, Edit2, Trash2, History, Loader2, Wand2, Download } from "lucide-react";
+import { LogIn, LogOut, MapPin, AlertTriangle, Image as ImageIcon, X, Filter, RefreshCw, Plus, Edit2, Trash2, History, Loader2, Wand2, Download, Upload } from "lucide-react";
+import AttendanceImportModal from "@/components/attendance/AttendanceImportModal";
 
 type Paginated<T> = {
   data: T[];
@@ -48,6 +49,7 @@ export default function AttendanceManagePage() {
   const [to, setTo] = useState(todayStr());
   const [page, setPage] = useState(1);
   const [preview, setPreview] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   // ===== Manual entry / edit / delete / audit =====
   const [shifts, setShifts] = useState<WorkShift[]>([]);
@@ -234,6 +236,13 @@ export default function AttendanceManagePage() {
           >
             <Download className="w-4 h-4" />
             <span className="hidden sm:inline">Excel</span>
+          </button>
+          <button
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-border text-foreground rounded-lg text-sm font-medium hover:bg-gray-50"
+          >
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">นำเข้า</span>
           </button>
           <button
             onClick={openCreate}
@@ -496,6 +505,9 @@ export default function AttendanceManagePage() {
           <img src={preview} alt="attendance" className="max-w-full max-h-full rounded-lg" />
         </div>
       )}
+
+      {/* Import modal */}
+      <AttendanceImportModal open={importOpen} onClose={() => setImportOpen(false)} onSuccess={load} />
 
       {/* Create / Edit modal */}
       {(showCreate || editTarget) && (
