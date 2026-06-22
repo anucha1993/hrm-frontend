@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -74,6 +74,8 @@ type DashboardData = {
   role: "admin" | "employee";
   me: MeData | null;
   today: {
+    from: string;
+    to: string;
     employees_active: number;
     present: number;
     late: number;
@@ -122,17 +124,42 @@ function fmtTime(iso: string | null): string {
   return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 }
 
+function todayStr(): string {
+  return new Date().toISOString().substring(0, 10);
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [from, setFrom] = useState(todayStr());
+  const [to, setTo] = useState(todayStr());
+  const [rangeLoading, setRangeLoading] = useState(false);
+
+  const load = useCallback(async (range: { from: string; to: string }) => {
+    const params = new URLSearchParams();
+    if (range.from) params.set("from", range.from);
+    if (range.to) params.set("to", range.to);
+    const r = await apiFetch<{ data: DashboardData }>(`/dashboard/summary?${params.toString()}`);
+    setData(r.data);
+  }, []);
 
   useEffect(() => {
-    apiFetch<{ data: DashboardData }>("/dashboard/summary")
-      .then((r) => setData(r.data))
+    load({ from: todayStr(), to: todayStr() })
       .catch((e) => setError(e instanceof Error ? e.message : "โหลดข้อมูลไม่สำเร็จ"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [load]);
+
+  async function applyRange(nextFrom: string, nextTo: string) {
+    setRangeLoading(true);
+    try {
+      await load({ from: nextFrom, to: nextTo });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "โหลดข้อมูลไม่สำเร็จ");
+    } finally {
+      setRangeLoading(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -191,10 +218,42 @@ export default function DashboardPage() {
         {/* ZONE 1: Today company-wide stats (admin only) */}
         {isAdmin && data.today ? (
           <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              ภาพรวมวันนี้
-            </h2>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                  {from === to
+                    ? (from === todayStr() ? "ภาพรวมวันนี้" : "ภาพรวมรายวัน")
+                    : "ภาพรวมตามช่วงวันที่"}
+                </h2>
+                <p className="text-xs text-slate-400">
+                  {from === to ? from : `${from} ถึง ${to}`}
+                </p>
+              </div>
+              <div className="flex items-end gap-2">
+                <div>
+                  <label className="mb-0.5 block text-[11px] text-slate-500">ตั้งแต่</label>
+                  <input
+                    type="date"
+                    value={from}
+                    max={to}
+                    onChange={(e) => { const v = e.target.value; setFrom(v); applyRange(v, to); }}
+                    className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-0.5 block text-[11px] text-slate-500">ถึง</label>
+                  <input
+                    type="date"
+                    value={to}
+                    min={from}
+                    onChange={(e) => { const v = e.target.value; setTo(v); applyRange(from, v); }}
+                    className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                {rangeLoading ? <span className="pb-2 text-xs text-slate-400">กำลังโหลด...</span> : null}
+              </div>
+            </div>
+            <div className={`grid grid-cols-2 gap-3 md:grid-cols-5 ${rangeLoading ? "opacity-60" : ""}`}>
               <StatCard
                 label="พนักงานทั้งหมด"
                 value={formatNumber(data.today.employees_active)}

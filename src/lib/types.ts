@@ -39,6 +39,8 @@ export type Department = {
   code: string;
   name: string;
   description?: string | null;
+  work_profile_id?: number | null;
+  work_profile?: WorkProfile | null;
   is_active: boolean;
 };
 
@@ -91,6 +93,7 @@ export type Employee = {
   education_level?: string | null;
   country_id: number | null;
   department_id: number | null;
+  work_profile_id?: number | null;
   employment_type_id: number | null;
   position?: string | null;
   hire_date?: string | null;
@@ -107,6 +110,7 @@ export type Employee = {
   user_id?: number | null;
   user?: { id: number; name: string; email: string } | null;
   department?: Department | null;
+  work_profile?: WorkProfile | null;
   country?: Country | null;
   employment_type?: EmploymentType | null;
   documents?: EmployeeDocument[];
@@ -213,6 +217,35 @@ export type WorkShift = {
   break_minutes: number;
   late_grace_minutes: number;
   cross_midnight: boolean;
+  is_active: boolean;
+};
+
+// โปรไฟล์การทำงาน = กะ + วันทำงาน + ปฏิทินวันหยุด (ผูกกับแผนก/รายคน)
+export type WorkProfile = {
+  id: number;
+  name: string;
+  work_shift_id: number | null;
+  work_shift?: WorkShift | null;
+  work_days: number[] | null; // [1..7] (1=จันทร์); null = ทุกวัน
+  description?: string | null;
+  is_default: boolean;
+  is_active: boolean;
+  holidays_count?: number;
+  departments_count?: number;
+  employees_count?: number;
+  holidays?: Holiday[];
+  departments?: Department[];
+};
+
+// วันหยุด — work_profile_id = null คือวันหยุดกลางทั้งบริษัท
+export type Holiday = {
+  id: number;
+  work_profile_id: number | null;
+  work_profile?: { id: number; name: string } | null;
+  name: string;
+  date: string; // Y-m-d
+  is_recurring: boolean; // ซ้ำทุกปี
+  is_working: boolean; // true = ยกเว้น (วันนี้ทำงานปกติ)
   is_active: boolean;
 };
 
