@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Badge from "@/components/Badge";
 import { apiFetch, apiDownload, ApiError } from "@/lib/api";
-import { Attendance, AttendanceAuditLog, Employee, WorkShift, OfficeLocation } from "@/lib/types";
+import { Attendance, AttendanceAuditLog, Employee, WorkShift, OfficeLocation, Department } from "@/lib/types";
 import { LogIn, LogOut, MapPin, AlertTriangle, Image as ImageIcon, X, Filter, RefreshCw, Plus, Edit2, Trash2, History, Loader2, Wand2, Download, Upload } from "lucide-react";
 import AttendanceImportModal from "@/components/attendance/AttendanceImportModal";
 
@@ -44,6 +44,8 @@ export default function AttendanceManagePage() {
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState<string>("");
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [departmentId, setDepartmentId] = useState<string>("");
   const [type, setType] = useState<string>("");
   const [from, setFrom] = useState(daysAgoStr(7));
   const [to, setTo] = useState(todayStr());
@@ -80,6 +82,7 @@ export default function AttendanceManagePage() {
     try {
       const params = new URLSearchParams({ from, to, page: page.toString(), per_page: "30" });
       if (employeeId) params.set("employee_id", employeeId);
+      if (departmentId) params.set("department_id", departmentId);
       if (type) params.set("type", type);
       const res = await apiFetch<{ data: Paginated<Attendance> } | Paginated<Attendance>>(`/attendance?${params.toString()}`);
       // backend wraps: { data: paginator }
@@ -100,7 +103,7 @@ export default function AttendanceManagePage() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, page, employeeId, type]);
+  }, [from, to, page, employeeId, departmentId, type]);
 
   useEffect(() => {
     apiFetch<{ data: { data: Employee[] } | Employee[] } | Employee[]>("/employees?per_page=500")
@@ -122,6 +125,9 @@ export default function AttendanceManagePage() {
       .catch(() => {});
     apiFetch<{ data: OfficeLocation[] }>("/office-locations")
       .then((res) => setOffices(res.data || []))
+      .catch(() => {});
+    apiFetch<{ data: Department[] }>("/departments")
+      .then((res) => setDepartments(res.data || []))
       .catch(() => {});
   }, []);
 
@@ -226,7 +232,7 @@ export default function AttendanceManagePage() {
             onClick={async () => {
               try {
                 await apiDownload(`/attendance/export`, `attendance-history-${from}-to-${to}.xlsx`, {
-                  params: { from, to, employee_id: employeeId || undefined, type: type || undefined },
+                  params: { from, to, employee_id: employeeId || undefined, department_id: departmentId || undefined, type: type || undefined },
                 });
               } catch (e) {
                 alert(e instanceof Error ? e.message : "ดาวน์โหลดไม่สำเร็จ");
@@ -267,7 +273,7 @@ export default function AttendanceManagePage() {
           <Filter className="w-4 h-4" />
           ตัวกรอง
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 sm:gap-3">
           <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs font-medium text-muted mb-1">พนักงาน</label>
             <select
@@ -279,6 +285,21 @@ export default function AttendanceManagePage() {
               {employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.employee_code} - {emp.first_name} {emp.last_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">แผนก</label>
+            <select
+              value={departmentId}
+              onChange={(e) => { setPage(1); setDepartmentId(e.target.value); }}
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+            >
+              <option value="">ทั้งหมด</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
                 </option>
               ))}
             </select>
@@ -331,6 +352,7 @@ export default function AttendanceManagePage() {
             <thead className="bg-gray-50 border-b border-border">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold">พนักงาน</th>
+                <th className="px-4 py-3 text-left font-semibold">แผนก</th>
                 <th className="px-4 py-3 text-left font-semibold">ประเภท</th>
                 <th className="px-4 py-3 text-left font-semibold">เวลา</th>
                 <th className="px-4 py-3 text-left font-semibold">สถานะ</th>
@@ -341,9 +363,9 @@ export default function AttendanceManagePage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted">กำลังโหลด...</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted">กำลังโหลด...</td></tr>
               ) : items.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted">ไม่พบข้อมูล</td></tr>
               ) : items.map((a) => {
                 const s = statusInfo(a.status);
                 return (
@@ -351,6 +373,11 @@ export default function AttendanceManagePage() {
                     <td className="px-4 py-3">
                       <div className="font-medium">{a.employee?.first_name} {a.employee?.last_name}</div>
                       <div className="text-xs text-muted">{a.employee?.employee_code}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {a.employee?.department?.name
+                        ? <span className="text-sm">{a.employee.department.name}</span>
+                        : <span className="text-xs text-muted italic">ไม่ระบุ</span>}
                     </td>
                     <td className="px-4 py-3">
                       {a.type === "check_in" ? (
@@ -435,7 +462,7 @@ export default function AttendanceManagePage() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="font-medium text-sm">{a.employee?.first_name} {a.employee?.last_name}</div>
-                    <div className="text-xs text-muted">{a.employee?.employee_code}</div>
+                    <div className="text-xs text-muted">{a.employee?.employee_code}{a.employee?.department?.name ? ` · ${a.employee.department.name}` : ""}</div>
                   </div>
                   {a.type === "check_in" ? (
                     <span className="inline-flex items-center gap-1 text-emerald-700 text-xs"><LogIn className="w-3 h-3" />เข้า</span>

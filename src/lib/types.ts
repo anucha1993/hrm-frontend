@@ -247,6 +247,8 @@ export type Attendance = {
     employee_code: string;
     first_name: string;
     last_name: string;
+    department_id?: number | null;
+    department?: Department | null;
   };
 };
 
