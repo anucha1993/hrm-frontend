@@ -15,6 +15,7 @@ import type {
   EmployeeStatus,
   EmploymentType,
   Labour,
+  WorkProfile,
 } from "@/lib/types";
 
 export type EmployeeFormProps = {
@@ -38,6 +39,7 @@ type FormState = {
   education_level: string;
   country_id: string;
   department_id: string;
+  work_profile_id: string;
   employment_type_id: string;
   position: string;
   hire_date: string;
@@ -70,6 +72,7 @@ const empty: FormState = {
   education_level: "",
   country_id: "",
   department_id: "",
+  work_profile_id: "",
   employment_type_id: "",
   position: "",
   hire_date: "",
@@ -103,6 +106,7 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
 
   const [form, setForm] = useState<FormState>(empty);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [workProfiles, setWorkProfiles] = useState<WorkProfile[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [types, setTypes] = useState<EmploymentType[]>([]);
   const [existingDocs, setExistingDocs] = useState<EmployeeDocument[]>([]);
@@ -126,11 +130,13 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
       apiFetch<{ data: Department[] }>("/departments"),
       apiFetch<{ data: Country[] }>("/countries"),
       apiFetch<{ data: EmploymentType[] }>("/employment-types"),
+      apiFetch<{ data: WorkProfile[] }>("/work-profiles?active_only=1"),
     ])
-      .then(([d, c, t]) => {
+      .then(([d, c, t, wp]) => {
         setDepartments(d.data);
         setCountries(c.data);
         setTypes(t.data);
+        setWorkProfiles(wp.data);
       })
       .catch(() => undefined);
   }, []);
@@ -158,6 +164,7 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
         education_level: e.education_level ?? "",
         country_id: e.country_id ? String(e.country_id) : "",
         department_id: e.department_id ? String(e.department_id) : "",
+        work_profile_id: e.work_profile_id ? String(e.work_profile_id) : "",
         employment_type_id: e.employment_type_id ? String(e.employment_type_id) : "",
         position: e.position ?? "",
         hire_date: e.hire_date?.slice(0, 10) ?? "",
@@ -379,6 +386,16 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="โปรไฟล์การทำงาน">
+            <select value={form.work_profile_id} onChange={(e) => set("work_profile_id", e.target.value)} className={input}>
+              <option value="">ใช้ตามแผนก (ค่าเริ่มต้น)</option>
+              {workProfiles.map((wp) => (
+                <option key={wp.id} value={wp.id}>
+                  {wp.name}
                 </option>
               ))}
             </select>

@@ -21,6 +21,7 @@ import {
   Calculator,
   CheckSquare,
   Loader2,
+  Search,
   Send,
   Square,
   Trash2,
@@ -34,6 +35,9 @@ interface Employee {
   first_name: string;
   last_name: string;
   status: string;
+  department_id: number | null;
+  employment_type_id: number | null;
+  department?: { id: number; name: string } | null;
 }
 
 export default function PayrollPeriodDetailPage() {
@@ -51,6 +55,11 @@ export default function PayrollPeriodDetailPage() {
   const [showCompute, setShowCompute] = useState(false);
   const [picked, setPicked] = useState<number[]>([]);
   const [allActive, setAllActive] = useState(true);
+  const [empSearch, setEmpSearch] = useState("");
+  const [empDept, setEmpDept] = useState("");
+  const [empType, setEmpType] = useState("");
+  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+  const [empTypes, setEmpTypes] = useState<{ id: number; name: string }[]>([]);
   const [computeResult, setComputeResult] = useState<{
     computed: { employee_id: number; net_pay: string }[];
     errors: { employee_id: number; employee_code?: string; message: string }[];
@@ -83,8 +92,14 @@ export default function PayrollPeriodDetailPage() {
 
   async function openCompute() {
     if (employees.length === 0) {
-      const res = await apiFetch<{ data: { data: Employee[] } }>("/employees?per_page=500&status=active");
-      setEmployees(res.data.data.filter((e) => e.status === "active"));
+      const [eRes, dRes, tRes] = await Promise.all([
+        apiFetch<{ data: { data: Employee[] } }>("/employees?per_page=500&status=active"),
+        apiFetch<{ data: { id: number; name: string }[] | { data: { id: number; name: string }[] } }>("/departments"),
+        apiFetch<{ data: { id: number; name: string }[] | { data: { id: number; name: string }[] } }>("/employment-types"),
+      ]);
+      setEmployees(eRes.data.data.filter((e) => e.status === "active"));
+      setDepartments(Array.isArray(dRes.data) ? dRes.data : dRes.data.data);
+      setEmpTypes(Array.isArray(tRes.data) ? tRes.data : tRes.data.data);
     }
     setShowCompute(true);
     setComputeResult(null);
@@ -143,6 +158,27 @@ export default function PayrollPeriodDetailPage() {
       { gross: 0, tax: 0, ssf: 0, deductions: 0, net: 0 },
     );
   }, [slips]);
+
+  const filteredEmployees = useMemo(() => {
+    const s = empSearch.trim().toLowerCase();
+    return employees.filter((e) => {
+      if (empDept && String(e.department_id ?? "") !== empDept) return false;
+      if (empType && String(e.employment_type_id ?? "") !== empType) return false;
+      if (s) {
+        const hay = `${e.employee_code} ${e.first_name} ${e.last_name}`.toLowerCase();
+        if (!hay.includes(s)) return false;
+      }
+      return true;
+    });
+  }, [employees, empSearch, empDept, empType]);
+
+  function selectAllFiltered() {
+    setPicked((prev) => {
+      const ids = new Set(prev);
+      filteredEmployees.forEach((e) => ids.add(e.id));
+      return Array.from(ids);
+    });
+  }
 
   const allChecked = slips.length > 0 && selectedSlips.length === slips.length;
 
@@ -355,20 +391,59 @@ export default function PayrollPeriodDetailPage() {
                 เลือกพนักงานเอง
               </label>
               {!allActive && (
-                <div className="border border-border rounded-lg max-h-64 overflow-y-auto">
-                  {employees.map((e) => (
-                    <label key={e.id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm border-b border-border last:border-0">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative flex-1 min-w-[160px]">
+                      <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
                       <input
-                        type="checkbox"
-                        checked={picked.includes(e.id)}
-                        onChange={(ev) =>
-                          setPicked((p) => (ev.target.checked ? [...p, e.id] : p.filter((x) => x !== e.id)))
-                        }
+                        value={empSearch}
+                        onChange={(e) => setEmpSearch(e.target.value)}
+                        placeholder="ค้นหารหัส/ชื่อ"
+                        className="payroll-input pl-8 w-full"
                       />
-                      <span className="font-mono text-xs">{e.employee_code}</span>
-                      {e.first_name} {e.last_name}
-                    </label>
-                  ))}
+                    </div>
+                    <select className="payroll-input" value={empDept} onChange={(e) => setEmpDept(e.target.value)}>
+                      <option value="">ทุกแผนก</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                    <select className="payroll-input" value={empType} onChange={(e) => setEmpType(e.target.value)}>
+                      <option value="">ทุกประเภท</option>
+                      {empTypes.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <button type="button" onClick={selectAllFiltered} className="text-primary-600 hover:text-primary-700 font-medium">
+                      เลือกทั้งหมดที่กรอง ({filteredEmployees.length})
+                    </button>
+                    <button type="button" onClick={() => setPicked([])} className="text-muted hover:text-foreground">
+                      ล้างที่เลือก
+                    </button>
+                    <span className="ml-auto text-muted">เลือกแล้ว {picked.length} คน</span>
+                  </div>
+                  <div className="border border-border rounded-lg max-h-64 overflow-y-auto">
+                    {filteredEmployees.length === 0 ? (
+                      <div className="px-3 py-6 text-center text-sm text-muted">ไม่พบพนักงานตามเงื่อนไข</div>
+                    ) : (
+                      filteredEmployees.map((e) => (
+                        <label key={e.id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm border-b border-border last:border-0">
+                          <input
+                            type="checkbox"
+                            checked={picked.includes(e.id)}
+                            onChange={(ev) =>
+                              setPicked((p) => (ev.target.checked ? [...p, e.id] : p.filter((x) => x !== e.id)))
+                            }
+                          />
+                          <span className="font-mono text-xs">{e.employee_code}</span>
+                          {e.first_name} {e.last_name}
+                          {e.department?.name && <span className="ml-auto text-xs text-muted">{e.department.name}</span>}
+                        </label>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
               {computeResult && (
