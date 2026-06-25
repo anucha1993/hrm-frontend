@@ -249,6 +249,78 @@ export type Holiday = {
   is_active: boolean;
 };
 
+// ข้อมูลพนักงานแบบย่อ (ใช้ใน relation ของกะ/สลับกะ)
+export type EmployeeBrief = {
+  id: number;
+  employee_code: string;
+  full_name: string;
+  first_name?: string;
+  last_name?: string;
+  department_id?: number | null;
+  department?: { id: number; name: string } | null;
+};
+
+// รูปแบบหมุนเวียนกะ — sequence เก็บ work_shift_id ของแต่ละช่วง (null = วันหยุดของช่วงนั้น)
+export type ShiftRotation = {
+  id: number;
+  name: string;
+  sequence: (number | null)[];
+  days_per_step: number; // เปลี่ยนกะทุกกี่วัน
+  anchor_date: string; // Y-m-d วันเริ่มรอบ
+  description?: string | null;
+  is_active: boolean;
+  assignments_count?: number;
+  assignments?: EmployeeRotation[];
+};
+
+export type EmployeeRotation = {
+  id: number;
+  employee_id: number;
+  shift_rotation_id: number;
+  offset: number; // เริ่มที่ช่องไหนของรอบ (ทำให้เหลื่อมกะกัน)
+  effective_from: string;
+  effective_to: string | null;
+  employee?: EmployeeBrief;
+};
+
+export type ShiftSwapStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+// คำขอสลับกะ
+export type ShiftSwapRequest = {
+  id: number;
+  requester_id: number;
+  counterparty_id: number;
+  requester_date: string;
+  counterparty_date: string;
+  requester_shift_id: number | null;
+  counterparty_shift_id: number | null;
+  reason: string | null;
+  status: ShiftSwapStatus;
+  approved_by: number | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  requester?: EmployeeBrief;
+  counterparty?: EmployeeBrief;
+  requester_shift?: WorkShift | null;
+  counterparty_shift?: WorkShift | null;
+  approver?: { id: number; name: string } | null;
+  created_at?: string;
+};
+
+// กะเฉพาะรายวัน (ปรับมือ / ผลจากการสลับกะ)
+export type ShiftDayOverride = {
+  id: number;
+  employee_id: number;
+  date: string;
+  work_shift_id: number | null;
+  is_day_off: boolean;
+  source: "manual" | "swap" | "rotation_exception";
+  shift_swap_request_id: number | null;
+  note: string | null;
+  employee?: EmployeeBrief;
+  work_shift?: WorkShift | null;
+};
+
 export type Attendance = {
   id: number;
   employee_id: number;

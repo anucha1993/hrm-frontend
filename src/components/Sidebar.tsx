@@ -69,6 +69,7 @@ const menuItems: MenuItem[] = [
     children: [
       { label: "ภาพรวมการลงเวลา", href: "/attendance/manage", permission: "attendance.view" },
       { label: "สรุปเวลาทำงานรายเดือน", href: "/attendance/summary", permission: ["attendance.summary.view", "attendance.checkin"] },
+      { label: "สลับกะ & ปรับกะรายวัน", href: "/attendance/shift-swaps", permission: "attendance.manage" },
       { label: "รายงานเวลางาน", href: "/reports/attendance", permission: "reports.view" },
     ],
   },

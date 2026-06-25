@@ -2,17 +2,19 @@
 
 import { useState } from "react";
 import Topbar from "@/components/Topbar";
-import { Clock, Layers, CalendarDays } from "lucide-react";
+import { Clock, Layers, CalendarDays, RotateCw } from "lucide-react";
 import ShiftsTab from "./ShiftsTab";
 import ProfilesTab from "./ProfilesTab";
 import HolidaysTab from "./HolidaysTab";
+import RotationsTab from "./RotationsTab";
 
-type TabKey = "shifts" | "profiles" | "holidays";
+type TabKey = "shifts" | "profiles" | "holidays" | "rotations";
 
 const TABS: { key: TabKey; label: string; icon: typeof Clock }[] = [
   { key: "shifts", label: "กะการทำงาน", icon: Clock },
   { key: "profiles", label: "โปรไฟล์การทำงาน", icon: Layers },
   { key: "holidays", label: "วันหยุด", icon: CalendarDays },
+  { key: "rotations", label: "หมุนเวียนกะ", icon: RotateCw },
 ];
 
 export default function ShiftsPage() {
@@ -46,6 +48,7 @@ export default function ShiftsPage() {
         {tab === "shifts" && <ShiftsTab />}
         {tab === "profiles" && <ProfilesTab />}
         {tab === "holidays" && <HolidaysTab />}
+        {tab === "rotations" && <RotationsTab />}
       </div>
     </>
   );
