@@ -148,6 +148,9 @@ export default function PayrollPeriodDetailPage() {
   const totals = useMemo(() => {
     return slips.reduce(
       (acc, s) => {
+        acc.base += parseFloat(s.base_pay);
+        acc.ot += parseFloat(s.ot_pay);
+        acc.allowances += parseFloat(s.allowances_total);
         acc.gross += parseFloat(s.gross_pay);
         acc.tax += parseFloat(s.tax);
         acc.ssf += parseFloat(s.ssf_employee);
@@ -155,7 +158,7 @@ export default function PayrollPeriodDetailPage() {
         acc.net += parseFloat(s.net_pay);
         return acc;
       },
-      { gross: 0, tax: 0, ssf: 0, deductions: 0, net: 0 },
+      { base: 0, ot: 0, allowances: 0, gross: 0, tax: 0, ssf: 0, deductions: 0, net: 0 },
     );
   }, [slips]);
 
@@ -364,6 +367,20 @@ export default function PayrollPeriodDetailPage() {
                   );
                 })}
               </tbody>
+              <tfoot className="bg-gray-50 border-t-2 border-border font-semibold">
+                <tr>
+                  <td className="px-3 py-3"></td>
+                  <td className="px-3 py-3 text-xs text-muted">รวมทั้งสิ้น ({slips.length} คน)</td>
+                  <td className="px-3 py-3 text-right">{fmtMoney(totals.base)}</td>
+                  <td className="px-3 py-3 text-right">{fmtMoney(totals.ot)}</td>
+                  <td className="px-3 py-3 text-right text-green-700">{fmtMoney(totals.allowances)}</td>
+                  <td className="px-3 py-3 text-right text-red-700">{fmtMoney(totals.deductions + totals.ssf)}</td>
+                  <td className="px-3 py-3 text-right">{fmtMoney(totals.tax)}</td>
+                  <td className="px-3 py-3 text-right text-primary-700">{fmtMoney(totals.net)}</td>
+                  <td className="px-3 py-3"></td>
+                  <td className="px-3 py-3"></td>
+                </tr>
+              </tfoot>
             </table>
             </div>
           </div>

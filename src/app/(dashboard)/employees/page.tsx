@@ -121,7 +121,7 @@ export default function EmployeesPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="ค้นหาชื่อ, รหัส, เลขบัตร..."
+              placeholder="ค้นหาชื่อ, ชื่อเล่น, รหัส, เลขบัตร..."
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border text-sm bg-white"
             />
           </div>
