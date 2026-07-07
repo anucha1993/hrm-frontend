@@ -7,9 +7,10 @@ import Link from "next/link";
 const settingSections = [
   {
     title: "ข้อมูลบริษัท",
-    description: "ตั้งค่าชื่อบริษัท ที่อยู่ โลโก้ และข้อมูลติดต่อ",
+    description: "ตั้งค่าชื่อบริษัทและที่อยู่ที่แสดงบนหัวสลิปเงินเดือน",
     icon: Building,
     color: "bg-primary-50 text-primary-600 border-primary-100",
+    href: "/settings/company",
   },
   {
     title: "จัดการผู้ใช้งาน",

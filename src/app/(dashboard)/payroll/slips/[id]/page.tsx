@@ -27,6 +27,7 @@ type PayrollApproval = {
 import { useAuth } from "@/lib/auth-context";
 import {
   ArrowLeft,
+  Printer,
   Send,
   Check,
   X,
@@ -154,12 +155,22 @@ export default function SlipDetailPage() {
     <>
       <Topbar title={`สลิป ${slip.slip_no}`} />
       <div className="p-6 space-y-5 max-w-5xl">
-        <Link
-          href={slip.period ? `/payroll/periods/${slip.period.id}` : "/payroll"}
-          className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
-        >
-          <ArrowLeft className="w-4 h-4" /> กลับ
-        </Link>
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href={slip.period ? `/payroll/periods/${slip.period.id}` : "/payroll"}
+            className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
+          >
+            <ArrowLeft className="w-4 h-4" /> กลับ
+          </Link>
+          <a
+            href={`/payslips/${id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-900"
+          >
+            <Printer className="w-4 h-4" /> พิมพ์สลิป / PDF
+          </a>
+        </div>
 
         {/* Header card */}
         <div className="bg-white rounded-xl border border-border p-5">

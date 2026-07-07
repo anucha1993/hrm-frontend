@@ -21,6 +21,7 @@ import {
   Calculator,
   CheckSquare,
   Loader2,
+  Printer,
   Search,
   Send,
   Square,
@@ -217,6 +218,14 @@ export default function PayrollPeriodDetailPage() {
             >
               <Download className="w-4 h-4" /> ดาวน์โหลด Excel
             </button>
+            <a
+              href={`/payslips/period/${id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-3 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-900"
+            >
+              <Printer className="w-4 h-4" /> พิมพ์สลิปทั้งงวด
+            </a>
             {canCompute && (
               <button
                 onClick={openCompute}
