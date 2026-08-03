@@ -37,13 +37,24 @@ import {
   Trash2,
   Receipt,
   RotateCcw,
+  FileText,
 } from "lucide-react";
+
+type WorkOrderBrief = {
+  id: number;
+  code: string;
+  status: string;
+  total_amount: string;
+  start_date: string;
+  end_date: string;
+};
 
 interface FullSlip extends Omit<PayrollSlip, "period"> {
   items?: PayrollSlipItem[];
   approvals?: PayrollApproval[];
   ot_sessions?: { id: number; name: string; work_date: string; pivot?: { hours: string; amount: string } }[];
   period?: { id: number; name: string; code: string };
+  work_orders?: WorkOrderBrief[];
 }
 
 export default function SlipDetailPage() {
@@ -296,7 +307,13 @@ export default function SlipDetailPage() {
         </div>
 
         {/* Line items */}
-        <ItemSection title="รายการรายได้ (Earnings)" items={earnings} positive />
+        <ItemSection
+          title="รายการรายได้ (Earnings)"
+          items={earnings}
+          positive
+          workOrders={slip.work_orders}
+          canViewWorkOrders={hasPermission("payroll.view")}
+        />
         <ItemSection title="รายการหัก (Deductions)" items={deductions} />
         <ItemSection title="ประกันสังคม" items={ssfItems} />
         <ItemSection title="ภาษี" items={taxItems} />
@@ -389,7 +406,19 @@ export default function SlipDetailPage() {
   );
 }
 
-function ItemSection({ title, items, positive = false }: { title: string; items: PayrollSlipItem[]; positive?: boolean }) {
+function ItemSection({
+  title,
+  items,
+  positive = false,
+  workOrders,
+  canViewWorkOrders = false,
+}: {
+  title: string;
+  items: PayrollSlipItem[];
+  positive?: boolean;
+  workOrders?: WorkOrderBrief[];
+  canViewWorkOrders?: boolean;
+}) {
   if (items.length === 0) return null;
   const total = items.reduce((a, i) => a + parseFloat(i.amount), 0);
   return (
@@ -408,6 +437,28 @@ function ItemSection({ title, items, positive = false }: { title: string; items:
               <td className="py-2">
                 <div>{i.name}</div>
                 {i.formula && <div className="text-xs text-muted">{i.formula}</div>}
+                {i.code === "PRODUCTION_WAGE" && workOrders && workOrders.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {workOrders.map((wo) =>
+                      canViewWorkOrders ? (
+                        <Link
+                          key={wo.id}
+                          href={`/payroll/work-orders/${wo.id}`}
+                          className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-xs text-primary-700 hover:bg-primary-100"
+                        >
+                          <FileText className="w-3 h-3" /> ใบงาน {wo.code}
+                        </Link>
+                      ) : (
+                        <span
+                          key={wo.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-border bg-slate-50 px-2 py-0.5 text-xs text-muted"
+                        >
+                          <FileText className="w-3 h-3" /> ใบงาน {wo.code}
+                        </span>
+                      )
+                    )}
+                  </div>
+                )}
               </td>
               <td className={`py-2 text-right ${positive ? "text-green-700" : "text-red-700"}`}>
                 {positive ? "+" : "-"}{fmtMoney(i.amount)}

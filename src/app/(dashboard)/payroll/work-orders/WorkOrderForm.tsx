@@ -55,6 +55,16 @@ export type ExtraRow = {
   note: string;
 };
 
+export type LinkedWorkOrderBrief = {
+  id: number;
+  code: string;
+  status: string;
+  total_amount: string;
+  team_leader_id: number;
+  team_leader_code: string | null;
+  team_leader_name: string | null;
+};
+
 export type WorkOrderFormInit = {
   id?: number;
   code?: string;
@@ -64,7 +74,9 @@ export type WorkOrderFormInit = {
   team_leader_id: number | "";
   location_name: string;
   note: string;
+  batch_code?: string;
   status?: "draft" | "in_progress" | "completed" | "paid";
+  total_amount?: string;
   items: ItemRow[];
   members: MemberRow[];
   extras?: ExtraRow[];
@@ -83,6 +95,7 @@ export const blankForm: WorkOrderFormInit = {
   team_leader_id: "",
   location_name: "",
   note: "",
+  batch_code: "",
   items: [],
   members: [],
   extras: [],
@@ -132,9 +145,15 @@ function calcPeriodDates(type: WorkOrderFormInit["period_type"]): { start: strin
 export default function WorkOrderForm({
   initial,
   isEdit = false,
+  linkedWorkOrders,
+  batchTotalAmount,
+  onBatchChanged,
 }: {
   initial: WorkOrderFormInit;
   isEdit?: boolean;
+  linkedWorkOrders?: LinkedWorkOrderBrief[];
+  batchTotalAmount?: number;
+  onBatchChanged?: () => void;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<WorkOrderFormInit>({ ...initial, extras: initial.extras ?? [] });
@@ -144,7 +163,66 @@ export default function WorkOrderForm({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingRates, setEditingRates] = useState<Set<number>>(new Set());
+  const [splitNumerator, setSplitNumerator] = useState("");
+  const [splitDenominator, setSplitDenominator] = useState("");
   const readOnly = form.status === "paid";
+
+  // ---------- ลอตผลิต (เชื่อม/ยกเลิกเชื่อมใบงานอื่นที่เป็นชุดผลิตเดียวกัน) ----------
+  const [batchQuery, setBatchQuery] = useState("");
+  const [batchResults, setBatchResults] = useState<Array<{ id: number; code: string; team_leader?: EmployeeBrief | null; total_amount: string }>>([]);
+  const [batchSearching, setBatchSearching] = useState(false);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchErr, setBatchErr] = useState<string | null>(null);
+
+  async function searchBatchCandidates() {
+    if (!batchQuery.trim()) { setBatchResults([]); return; }
+    setBatchSearching(true);
+    setBatchErr(null);
+    try {
+      const res = await apiFetch<{ data: { data: Array<{ id: number; code: string; team_leader?: EmployeeBrief | null; total_amount: string }> } }>(
+        `/payroll/work-orders?code=${encodeURIComponent(batchQuery.trim())}&per_page=10`
+      );
+      const excludeIds = new Set([form.id, ...(linkedWorkOrders ?? []).map((s) => s.id)]);
+      setBatchResults(res.data.data.filter((w) => !excludeIds.has(w.id)));
+    } catch (e) {
+      setBatchErr(e instanceof Error ? e.message : "ค้นหาไม่สำเร็จ");
+    } finally {
+      setBatchSearching(false);
+    }
+  }
+
+  async function linkBatchTo(targetId: number) {
+    if (!form.id) return;
+    setBatchBusy(true);
+    setBatchErr(null);
+    try {
+      await apiFetch(`/payroll/work-orders/${form.id}/link-batch`, {
+        method: "POST", body: { target_work_order_id: targetId },
+      });
+      setBatchQuery("");
+      setBatchResults([]);
+      onBatchChanged?.();
+    } catch (e) {
+      const msg = e instanceof ApiError ? ((e.data as { message?: string } | null)?.message ?? e.message) : "เชื่อมใบงานไม่สำเร็จ";
+      setBatchErr(msg);
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
+  async function unlinkBatch(targetId: number) {
+    if (!confirm("ยกเลิกการเชื่อมลอตผลิตของใบงานนี้?")) return;
+    setBatchBusy(true);
+    setBatchErr(null);
+    try {
+      await apiFetch(`/payroll/work-orders/${targetId}/unlink-batch`, { method: "POST" });
+      onBatchChanged?.();
+    } catch (e) {
+      setBatchErr(e instanceof Error ? e.message : "ยกเลิกไม่สำเร็จ");
+    } finally {
+      setBatchBusy(false);
+    }
+  }
 
   function toggleEditRate(idx: number) {
     setEditingRates((s) => {
@@ -184,6 +262,17 @@ export default function WorkOrderForm({
       if (it.rate_at_target_override !== "" || it.rate_below_target_override !== "") idxs.add(i);
     });
     if (idxs.size > 0) setEditingRates((prev) => new Set([...prev, ...idxs]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial]);
+
+  // ถ้าหมายเหตุมีรูปแบบ "สัดส่วนทีม X/Y คน" (จากการกดคำนวณครั้งก่อน) ให้ดึงมาเติมช่องกรอกใหม่
+  // เพื่อให้เห็นค่าที่เคยตั้งไว้ตอนเปิดใบงานเดิม ไม่ใช่ต้องกรอกใหม่ทุกครั้ง
+  useEffect(() => {
+    const m = (initial.note || "").match(/สัดส่วนทีม\s*(\d+)\s*\/\s*(\d+)\s*คน/);
+    if (m) {
+      setSplitNumerator(m[1]);
+      setSplitDenominator(m[2]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
 
@@ -244,6 +333,39 @@ export default function WorkOrderForm({
   }
   function updateItem(idx: number, patch: Partial<ItemRow>) {
     setForm((f) => ({ ...f, items: f.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)) }));
+  }
+
+  // เมื่อชุดผลิตเดียวกันถูกแบ่งทำ 2 ทีมขึ้นไป (เช่น ยก/เท บนจำนวนชิ้นเดียวกัน) —
+  // คำนวณเรทเฉพาะใบงานนี้ = เรทมาตรฐาน × สัดส่วนคนในทีมนี้ / คนรวมทั้งชุด แล้วใส่เป็น override ให้ทุกรายการ
+  function applySplitRatio() {
+    const num = Number(splitNumerator);
+    const den = Number(splitDenominator);
+    if (!num || !den || num <= 0 || den <= 0 || num > den) {
+      setErr("กรุณากรอกจำนวนคนทีมนี้ และจำนวนคนรวมทั้งชุดให้ถูกต้อง (คนทีมนี้ต้องไม่เกินคนรวม)");
+      return;
+    }
+    const ratio = num / den;
+    setForm((f) => ({
+      ...f,
+      note: f.note || `แบ่งค่าแรงตามสัดส่วนทีม ${num}/${den} คน (ชุดผลิตเดียวกัน แบ่งทำกับทีมอื่น)`,
+      items: f.items.map((it) => {
+        const rate = findRate(it.production_rate_item_id);
+        if (!rate) return it;
+        const baseHigh = Number(rate.rate_at_target);
+        const baseLow = rate.rate_below_target ? Number(rate.rate_below_target) : baseHigh;
+        return {
+          ...it,
+          rate_at_target_override: (Math.round(baseHigh * ratio * 100) / 100).toFixed(2),
+          rate_below_target_override: (Math.round(baseLow * ratio * 100) / 100).toFixed(2),
+        };
+      }),
+    }));
+    setEditingRates((prev) => {
+      const next = new Set(prev);
+      form.items.forEach((_, i) => next.add(i));
+      return next;
+    });
+    setErr(null);
   }
 
   // ---------- members ----------
@@ -378,6 +500,110 @@ export default function WorkOrderForm({
           )}
         </div>
 
+        {/* ลอตผลิต (เชื่อมกับใบงานอื่นที่เป็นชุดผลิตเดียวกัน) */}
+        {isEdit && form.id && (
+          <div className="bg-white rounded-xl border border-border p-5">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-amber-600" />
+                <span className="text-sm font-semibold">ลอตผลิต (ชิ้นงานชุดเดียวกัน แบ่งทำหลายทีม)</span>
+              </div>
+              {(linkedWorkOrders?.length ?? 0) > 0 && (
+                <div className="text-right">
+                  <div className="text-xs text-muted">ยอดรวมทั้งลอต</div>
+                  <div className="text-base font-bold text-amber-700">{fmtMoney(batchTotalAmount ?? 0)}</div>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted mb-3">
+              เชื่อมกับใบงานอื่นที่เป็นชุดผลิตเดียวกัน (เช่น แบ่งทำ ยก/เท บนชิ้นงานชุดเดียวกัน) เพื่อกันยอดจ่ายซ้ำ — เมื่อเชื่อมแล้วจะเห็นกันทั้งสองฝั่งอัตโนมัติ
+            </p>
+
+            {(linkedWorkOrders?.length ?? 0) > 0 && (
+              <table className="w-full text-sm mb-3">
+                <thead>
+                  <tr className="text-left text-xs text-muted uppercase">
+                    <th className="py-1">ใบงาน</th>
+                    <th className="py-1">หัวหน้าทีม</th>
+                    <th className="py-1">สถานะ</th>
+                    <th className="py-1 text-right">ยอดเงิน</th>
+                    <th className="py-1 w-14"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-border">
+                    <td className="py-1.5 font-medium">{form.code} (ใบนี้)</td>
+                    <td className="py-1.5">
+                      {(() => {
+                        const leader = employees.find((e) => e.id === form.team_leader_id);
+                        return leader ? `${leader.employee_code} - ${leader.first_name} ${leader.last_name}` : "—";
+                      })()}
+                    </td>
+                    <td className="py-1.5">{form.status}</td>
+                    <td className="py-1.5 text-right font-semibold">{fmtMoney(form.total_amount ?? 0)}</td>
+                    <td className="py-1.5 text-right">
+                      {!readOnly && (
+                        <button type="button" disabled={batchBusy} onClick={() => unlinkBatch(form.id!)}
+                          className="text-red-600 hover:underline text-xs disabled:opacity-40">ยกเลิก</button>
+                      )}
+                    </td>
+                  </tr>
+                  {(linkedWorkOrders ?? []).map((s) => (
+                    <tr key={s.id} className="border-t border-border">
+                      <td className="py-1.5">
+                        <Link href={`/payroll/work-orders/${s.id}`} className="text-primary-600 hover:underline font-medium">{s.code}</Link>
+                      </td>
+                      <td className="py-1.5">{s.team_leader_code ? `${s.team_leader_code} - ${s.team_leader_name}` : "—"}</td>
+                      <td className="py-1.5">{s.status}</td>
+                      <td className="py-1.5 text-right font-semibold">{fmtMoney(s.total_amount)}</td>
+                      <td className="py-1.5 text-right">
+                        {!readOnly && (
+                          <button type="button" disabled={batchBusy} onClick={() => unlinkBatch(s.id)}
+                            className="text-red-600 hover:underline text-xs disabled:opacity-40">ยกเลิก</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {!readOnly && (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input type="text" value={batchQuery} onChange={(e) => setBatchQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); searchBatchCandidates(); } }}
+                    placeholder="ค้นหาด้วยเลขที่ใบงาน เช่น WO-2026072803"
+                    className="payroll-input w-64" />
+                  <button type="button" onClick={searchBatchCandidates} disabled={batchSearching}
+                    className="px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-medium hover:bg-gray-50 disabled:opacity-50">
+                    {batchSearching ? "กำลังค้นหา..." : "ค้นหา"}
+                  </button>
+                  {batchErr && <span className="text-xs text-red-600 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{batchErr}</span>}
+                </div>
+
+                {batchResults.length > 0 && (
+                  <div className="mt-2 border border-border rounded-lg divide-y divide-border">
+                    {batchResults.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <div>
+                          <span className="font-medium">{r.code}</span>
+                          {r.team_leader && <span className="text-muted ml-2 text-xs">{r.team_leader.employee_code} - {r.team_leader.first_name} {r.team_leader.last_name}</span>}
+                          <span className="text-muted ml-2 text-xs">{fmtMoney(r.total_amount)}</span>
+                        </div>
+                        <button type="button" disabled={batchBusy} onClick={() => linkBatchTo(r.id)}
+                          className="px-2.5 py-1 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50">
+                          เชื่อมใบงานนี้
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {/* Period quick-pick */}
         <div className="bg-white rounded-xl border border-border p-5">
           <div className="flex items-center gap-2 mb-3">
@@ -463,6 +689,30 @@ export default function WorkOrderForm({
               </button>
             )}
           </div>
+          {!readOnly && form.items.length > 0 && (
+            <div className="px-4 py-3 border-b border-border bg-amber-50/60">
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs text-muted mb-1">ชุดผลิตนี้แบ่งทำกับทีมอื่นไหม? จำนวนคนทีมนี้</label>
+                  <input type="number" min="1" step="1" className="payroll-input w-24 text-right"
+                    value={splitNumerator} onChange={(e) => setSplitNumerator(e.target.value)} placeholder="เช่น 8" />
+                </div>
+                <span className="text-muted pb-2">จาก</span>
+                <div>
+                  <label className="block text-xs text-muted mb-1">จำนวนคนรวมทั้งชุด (ทุกทีม)</label>
+                  <input type="number" min="1" step="1" className="payroll-input w-24 text-right"
+                    value={splitDenominator} onChange={(e) => setSplitDenominator(e.target.value)} placeholder="เช่น 14" />
+                </div>
+                <button type="button" onClick={applySplitRatio}
+                  className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 whitespace-nowrap">
+                  คำนวณเรทตามสัดส่วน → ใช้กับทุกรายการ
+                </button>
+                <span className="text-[11px] text-muted max-w-xs">
+                  ใช้เมื่อชิ้นงานชุดเดียวกัน (จำนวนเท่ากัน) ถูกแบ่งทำ 2 ทีม เช่น ยก/เท — ระบบจะคูณเรทมาตรฐานด้วยสัดส่วนคนแล้วใส่เป็นเรทปรับพิเศษ (override) ให้ทุกรายการอัตโนมัติ ป้องกันยอดเบิ้ล
+                </span>
+              </div>
+            </div>
+          )}
           {form.items.length === 0 ? (
             <div className="p-8 text-center text-muted text-sm">ยังไม่มีรายการผลิต — กด &quot;เพิ่มรายการ&quot;</div>
           ) : (

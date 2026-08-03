@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { Loader2, Plus, Trash2, Save, AlertCircle, Calendar, Pencil, Printer, X } from "lucide-react";
 import Topbar from "@/components/Topbar";
 import { apiFetch, ApiError } from "@/lib/api";
 import { fmtMoney, fmtDate } from "@/lib/payroll";
-import WorkOrderForm, { type WorkOrderFormInit, type ItemRow, type MemberRow, type ExtraRow } from "../WorkOrderForm";
+import WorkOrderForm, { type WorkOrderFormInit, type ItemRow, type MemberRow, type ExtraRow, type LinkedWorkOrderBrief } from "../WorkOrderForm";
 
 type RateItemBrief = { id: number; code: string; name: string; unit: string; work_type: string };
 type EmployeeBrief = { id: number; employee_code: string; first_name: string; last_name: string };
@@ -25,6 +26,8 @@ type DailyEntry = {
   items: DailyEntryItem[];
 };
 
+type LinkedWorkOrder = LinkedWorkOrderBrief;
+
 type WorkOrderDetail = {
   id: number;
   code: string;
@@ -36,6 +39,9 @@ type WorkOrderDetail = {
   location_name: string | null;
   status: NonNullable<WorkOrderFormInit["status"]>;
   note: string | null;
+  batch_code: string | null;
+  linked_work_orders?: LinkedWorkOrder[];
+  batch_total_amount?: number;
   total_amount: string;
   items: Array<{
     id: number;
@@ -90,7 +96,9 @@ export default function EditWorkOrderPage() {
     team_leader_id: data.team_leader_id,
     location_name: data.location_name ?? "",
     note: data.note ?? "",
+    batch_code: data.batch_code ?? "",
     status: data.status,
+    total_amount: data.total_amount,
     items: data.items.map<ItemRow>((it) => ({
       id: it.id,
       production_rate_item_id: it.production_rate_item_id,
@@ -131,7 +139,13 @@ export default function EditWorkOrderPage() {
       </div>
 
       {tab === "detail" ? (
-        <WorkOrderForm initial={initial} isEdit />
+        <WorkOrderForm
+          initial={initial}
+          isEdit
+          linkedWorkOrders={data.linked_work_orders}
+          batchTotalAmount={data.batch_total_amount}
+          onBatchChanged={load}
+        />
       ) : (
         <DailyEntriesTab data={data} onChanged={load} />
       )}
