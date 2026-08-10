@@ -22,6 +22,49 @@ function apiErrMsg(e: unknown, fallback: string) {
   return e instanceof Error ? e.message : fallback;
 }
 
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+function isCompleteTime(v: string) {
+  return v === "" || TIME_RE.test(v);
+}
+
+// Plain masked text field for HH:MM (24-hour). Native <input type="time"> was replaced because
+// on 12-hour-locale browsers it silently keeps value="" until the AM/PM segment is picked too —
+// which caused check-in times to be dropped without any error when only "08:00" was typed.
+function TimeField({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 4);
+    onChange(digits.length >= 3 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits);
+  }
+  function handleBlur() {
+    if (!value) return;
+    const digits = value.replace(/\D/g, "");
+    if (!digits) { onChange(""); return; }
+    const h = Math.min(23, parseInt(digits.slice(0, 2) || "0", 10));
+    const m = Math.min(59, parseInt(digits.slice(2, 4) || "0", 10));
+    onChange(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+  }
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder="HH:MM"
+      maxLength={5}
+      value={value}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      className={className}
+    />
+  );
+}
+
 type DayCell = {
   date: string; // YYYY-MM-DD
   inMonth: boolean;
@@ -179,6 +222,7 @@ export default function EmployeeAttendanceCalendarModal({
     if (!employee || !selected) return;
     setErr(null);
     if (!checkIn && !checkOut) { setErr("กรุณาระบุเวลาเข้างานหรือเลิกงานอย่างน้อย 1 ค่า"); return; }
+    if (!isCompleteTime(checkIn) || !isCompleteTime(checkOut)) { setErr("รูปแบบเวลาไม่ครบ กรุณากรอกเป็น HH:MM เช่น 08:00"); return; }
     if (!reason || reason.trim().length < 5) { setErr("กรุณาระบุเหตุผล อย่างน้อย 5 ตัวอักษร"); return; }
 
     const existingIn = selectedCell?.checkIn;
@@ -269,6 +313,7 @@ export default function EmployeeAttendanceCalendarModal({
     if (!employee || selectedDays.size === 0) return;
     setBulkErr(null);
     if (!bulkCheckIn && !bulkCheckOut) { setBulkErr("กรุณาระบุเวลาเข้างานหรือเลิกงานอย่างน้อย 1 ค่า"); return; }
+    if (!isCompleteTime(bulkCheckIn) || !isCompleteTime(bulkCheckOut)) { setBulkErr("รูปแบบเวลาไม่ครบ กรุณากรอกเป็น HH:MM เช่น 08:00"); return; }
     if (!bulkReason || bulkReason.trim().length < 5) { setBulkErr("กรุณาระบุเหตุผล อย่างน้อย 5 ตัวอักษร"); return; }
     setBulkBusy(true);
     try {
@@ -492,11 +537,11 @@ export default function EmployeeAttendanceCalendarModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">เวลาเข้างาน (ใช้กับทุกวันที่เลือก)</label>
-                  <input type="time" value={bulkCheckIn} onChange={(e) => setBulkCheckIn(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  <TimeField value={bulkCheckIn} onChange={setBulkCheckIn} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">เวลาเลิกงาน (ใช้กับทุกวันที่เลือก)</label>
-                  <input type="time" value={bulkCheckOut} onChange={(e) => setBulkCheckOut(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  <TimeField value={bulkCheckOut} onChange={setBulkCheckOut} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -553,7 +598,7 @@ export default function EmployeeAttendanceCalendarModal({
                 วันที่ {new Date(selected + "T00:00:00").toLocaleDateString("th-TH", { day: "2-digit", month: "long", year: "numeric" })}
               </div>
 
-              {selectedOverride?.is_day_off ? (
+              {selectedOverride?.is_day_off && (
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm flex items-center justify-between flex-wrap gap-2">
                   <span className="text-orange-700">วันนี้ถูกแจ้งเป็นวันหยุดแล้ว{selectedOverride.note ? ` — ${selectedOverride.note}` : ""}</span>
                   {selectedOverride.source === "manual" && (
@@ -562,38 +607,34 @@ export default function EmployeeAttendanceCalendarModal({
                     </button>
                   )}
                 </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">เวลาเข้างาน</label>
-                      <input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">เวลาเลิกงาน</label>
-                      <input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                    </div>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm text-slate-700">
-                    <input type="checkbox" checked={isOt} onChange={(e) => setIsOt(e.target.checked)} className="rounded border-slate-300" />
-                    ระบุว่าวันนี้เป็นวัน OT (ล่วงเวลา)
-                  </label>
-                </>
               )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">เวลาเข้างาน</label>
+                  <TimeField value={checkIn} onChange={setCheckIn} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">เวลาเลิกงาน</label>
+                  <TimeField value={checkOut} onChange={setCheckOut} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" checked={isOt} onChange={(e) => setIsOt(e.target.checked)} className="rounded border-slate-300" />
+                ระบุว่าวันนี้เป็นวัน OT (ล่วงเวลา){selectedOverride?.is_day_off ? " — มาทำงานในวันหยุด" : ""}
+              </label>
 
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุ</label>
                 <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="(ถ้ามี)" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
               </div>
 
-              {!selectedOverride?.is_day_off && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    เหตุผล (ใช้กับ &quot;บันทึกเวลา&quot;) * <span className="font-normal text-slate-400">(บังคับ — เก็บใน audit log)</span>
-                  </label>
-                  <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เช่น พนักงานลืมลงเวลา" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  เหตุผล (ใช้กับ &quot;บันทึกเวลา&quot;) * <span className="font-normal text-slate-400">(บังคับ — เก็บใน audit log)</span>
+                </label>
+                <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เช่น พนักงานลืมลงเวลา" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+              </div>
 
               {err && (
                 <div className="bg-rose-50 text-rose-700 text-sm rounded-lg p-2 flex items-center gap-2">
@@ -605,27 +646,25 @@ export default function EmployeeAttendanceCalendarModal({
               <div className="flex justify-end gap-2 flex-wrap">
                 <button type="button" onClick={() => setSelected(null)} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300">ปิด</button>
                 {!selectedOverride?.is_day_off && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => markDayOff(selected, note)}
-                      disabled={busy}
-                      className="px-3 py-1.5 text-sm rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-50 inline-flex items-center gap-2"
-                    >
-                      <Ban className="w-4 h-4" />
-                      แจ้งเป็นวันหยุด
-                    </button>
-                    <button
-                      type="button"
-                      onClick={submitDay}
-                      disabled={busy}
-                      className="px-4 py-1.5 text-sm rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-2"
-                    >
-                      {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-                      บันทึกเวลา
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => markDayOff(selected, note)}
+                    disabled={busy}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-50 inline-flex items-center gap-2"
+                  >
+                    <Ban className="w-4 h-4" />
+                    แจ้งเป็นวันหยุด
+                  </button>
                 )}
+                <button
+                  type="button"
+                  onClick={submitDay}
+                  disabled={busy}
+                  className="px-4 py-1.5 text-sm rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                  บันทึกเวลา
+                </button>
               </div>
             </div>
           )}
