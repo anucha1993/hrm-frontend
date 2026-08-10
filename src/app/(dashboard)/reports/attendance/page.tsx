@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, RefreshCcw, Search } from "lucide-react";
+import { Download, RefreshCcw, Search, UserPlus } from "lucide-react";
 import Topbar from "@/components/Topbar";
 import { apiFetch, getToken } from "@/lib/api";
 import {
@@ -9,6 +9,8 @@ import {
   StatCard,
   formatNumber,
 } from "@/components/reports/ReportPrimitives";
+import BulkManualEntryModal from "@/components/attendance/BulkManualEntryModal";
+import EmployeeAttendanceCalendarModal from "@/components/attendance/EmployeeAttendanceCalendarModal";
 
 type EmpRow = {
   employee_id: number;
@@ -58,6 +60,8 @@ export default function ReportAttendancePage() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("late_days");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [calendarEmployee, setCalendarEmployee] = useState<{ id: number; code: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -182,6 +186,13 @@ export default function ReportAttendancePage() {
             <Download className="h-4 w-4" />
             CSV
           </button>
+          <button
+            onClick={() => setBulkOpen(true)}
+            className="inline-flex items-center gap-2 rounded bg-primary-600 px-3 py-2 text-sm text-white hover:bg-primary-700"
+          >
+            <UserPlus className="h-4 w-4" />
+            เพิ่มเวลาย้อนหลัง (หลายวัน)
+          </button>
         </div>
 
         {error ? (
@@ -243,8 +254,13 @@ export default function ReportAttendancePage() {
                       </tr>
                     ) : (
                       rows.map((r) => (
-                        <tr key={r.employee_id} className="hover:bg-slate-50">
-                          <td className="px-3 py-2 font-mono text-xs">{r.employee_code}</td>
+                        <tr
+                          key={r.employee_id}
+                          onClick={() => setCalendarEmployee({ id: r.employee_id, code: r.employee_code, name: r.employee_name })}
+                          className="hover:bg-slate-50 cursor-pointer"
+                          title="คลิกเพื่อดูปฏิทิน/เพิ่มเวลาย้อนหลัง"
+                        >
+                          <td className="px-3 py-2 font-mono text-xs text-primary-700 underline decoration-dotted">{r.employee_code}</td>
                           <td className="px-3 py-2">{r.employee_name}</td>
                           <td className="px-3 py-2 text-slate-600">{r.department ?? "-"}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
@@ -282,6 +298,15 @@ export default function ReportAttendancePage() {
           </>
         )}
       </div>
+
+      <BulkManualEntryModal open={bulkOpen} onClose={() => setBulkOpen(false)} onSuccess={load} />
+      <EmployeeAttendanceCalendarModal
+        open={!!calendarEmployee}
+        employee={calendarEmployee}
+        initialMonth={to}
+        onClose={() => setCalendarEmployee(null)}
+        onChanged={load}
+      />
     </>
   );
 }
