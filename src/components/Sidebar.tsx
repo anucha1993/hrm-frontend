@@ -19,6 +19,7 @@ import {
   CalendarOff,
   Factory,
   Receipt,
+  HandCoins,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -82,6 +83,16 @@ const menuItems: MenuItem[] = [
       { label: "ใบลาของฉัน", href: "/leave/my", permission: "leave.request" },
       { label: "อนุมัติใบลา", href: "/leave/approval", permission: "leave.approve" },
       { label: "ประเภทการลา", href: "/leave/types", permission: "leave.config" },
+    ],
+  },
+  {
+    label: "เบิกเงินล่วงหน้า",
+    href: "/advances/my",
+    icon: HandCoins,
+    permission: ["advance.request", "advance.approve"],
+    children: [
+      { label: "คำขอของฉัน", href: "/advances/my", permission: "advance.request" },
+      { label: "อนุมัติ/บันทึกจ่าย", href: "/advances/approval", permission: "advance.approve" },
     ],
   },
   {

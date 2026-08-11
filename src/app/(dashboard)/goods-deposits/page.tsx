@@ -7,6 +7,7 @@ import { Plus, Search, Edit2, Trash2, Loader2, Receipt, XCircle } from "lucide-r
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { fmtDate } from "@/lib/payroll";
 import type { GoodsDepositSlip, GoodsDepositStatus, Paginated } from "@/lib/types";
 
 const STATUS_LABEL: Record<
@@ -193,7 +194,7 @@ export default function GoodsDepositsPage() {
                       return (
                         <tr key={d.id} className="hover:bg-surface/50">
                           <td className="px-4 py-3 text-sm font-mono text-foreground">{d.slip_no}</td>
-                          <td className="px-4 py-3 text-sm text-muted">{d.deposit_date}</td>
+                          <td className="px-4 py-3 text-sm text-muted">{fmtDate(d.deposit_date)}</td>
                           <td className="px-4 py-3">
                             {d.employee ? (
                               <div>

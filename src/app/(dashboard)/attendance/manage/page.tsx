@@ -6,6 +6,7 @@ import { apiFetch, apiDownload, ApiError } from "@/lib/api";
 import { Attendance, AttendanceAuditLog, Employee, WorkShift, OfficeLocation, Department } from "@/lib/types";
 import { LogIn, LogOut, MapPin, AlertTriangle, Image as ImageIcon, X, Filter, RefreshCw, Plus, Edit2, Trash2, History, Loader2, Wand2, Download, Upload } from "lucide-react";
 import AttendanceImportModal from "@/components/attendance/AttendanceImportModal";
+import EmployeeCombobox from "@/components/EmployeeCombobox";
 
 type Paginated<T> = {
   data: T[];
@@ -276,18 +277,14 @@ export default function AttendanceManagePage() {
         <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 sm:gap-3">
           <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs font-medium text-muted mb-1">พนักงาน</label>
-            <select
+            <EmployeeCombobox
+              employees={employees}
               value={employeeId}
-              onChange={(e) => { setPage(1); setEmployeeId(e.target.value); }}
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm"
-            >
-              <option value="">ทั้งหมด</option>
-              {employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.employee_code} - {emp.first_name} {emp.last_name}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => { setPage(1); setEmployeeId(id); }}
+              placeholder="ทั้งหมด"
+              clearLabel="ทั้งหมด"
+              className="w-full px-3 py-2 pr-8 border border-border rounded-lg text-sm"
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">แผนก</label>
@@ -552,12 +549,12 @@ export default function AttendanceManagePage() {
               {showCreate && (
                 <div>
                   <label className="block text-xs font-medium text-muted mb-1">พนักงาน *</label>
-                  <select className="w-full px-3 py-2 border border-border rounded-lg text-sm" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })}>
-                    <option value="">— เลือก —</option>
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>{emp.employee_code} — {emp.first_name} {emp.last_name}</option>
-                    ))}
-                  </select>
+                  <EmployeeCombobox
+                    employees={employees}
+                    value={form.employee_id}
+                    onChange={(id) => setForm({ ...form, employee_id: id })}
+                    className="w-full px-3 py-2 pr-8 border border-border rounded-lg text-sm"
+                  />
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">

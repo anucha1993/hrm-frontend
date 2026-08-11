@@ -28,6 +28,7 @@ import {
   Trash2,
   AlertCircle,
   Download,
+  X,
 } from "lucide-react";
 
 interface Employee {
@@ -67,6 +68,8 @@ export default function PayrollPeriodDetailPage() {
   } | null>(null);
   const [selectedSlips, setSelectedSlips] = useState<number[]>([]);
   const [bulkErr, setBulkErr] = useState<string | null>(null);
+  const [slipQuery, setSlipQuery] = useState("");
+  const [slipStatusFilter, setSlipStatusFilter] = useState("");
 
   const canCompute = hasPermission("payroll.compute");
   const canApproveL1 = hasPermission("payroll.approve_l1");
@@ -163,6 +166,35 @@ export default function PayrollPeriodDetailPage() {
     );
   }, [slips]);
 
+  const filteredSlips = useMemo(() => {
+    const q = slipQuery.trim().toLowerCase();
+    return slips.filter((s) => {
+      if (slipStatusFilter && s.status !== slipStatusFilter) return false;
+      if (q) {
+        const hay = `${s.employee?.employee_code ?? ""} ${s.employee?.first_name ?? ""} ${s.employee?.last_name ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [slips, slipQuery, slipStatusFilter]);
+
+  const filteredTotals = useMemo(() => {
+    return filteredSlips.reduce(
+      (acc, s) => {
+        acc.base += parseFloat(s.base_pay);
+        acc.ot += parseFloat(s.ot_pay);
+        acc.allowances += parseFloat(s.allowances_total);
+        acc.gross += parseFloat(s.gross_pay);
+        acc.tax += parseFloat(s.tax);
+        acc.ssf += parseFloat(s.ssf_employee);
+        acc.deductions += parseFloat(s.deductions_total);
+        acc.net += parseFloat(s.net_pay);
+        return acc;
+      },
+      { base: 0, ot: 0, allowances: 0, gross: 0, tax: 0, ssf: 0, deductions: 0, net: 0 },
+    );
+  }, [filteredSlips]);
+
   const filteredEmployees = useMemo(() => {
     const s = empSearch.trim().toLowerCase();
     return employees.filter((e) => {
@@ -184,7 +216,7 @@ export default function PayrollPeriodDetailPage() {
     });
   }
 
-  const allChecked = slips.length > 0 && selectedSlips.length === slips.length;
+  const allChecked = filteredSlips.length > 0 && filteredSlips.every((s) => selectedSlips.includes(s.id));
 
   if (loading || !period) {
     return (
@@ -309,6 +341,46 @@ export default function PayrollPeriodDetailPage() {
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-border overflow-hidden">
+            <div className="p-3 border-b border-border flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                <input
+                  type="text"
+                  value={slipQuery}
+                  onChange={(e) => setSlipQuery(e.target.value)}
+                  placeholder="ค้นหาพนักงาน (รหัส/ชื่อ/นามสกุล)"
+                  className="w-full pl-9 pr-8 py-2 border border-border rounded-lg text-sm"
+                />
+                {slipQuery && (
+                  <button
+                    onClick={() => setSlipQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <select
+                value={slipStatusFilter}
+                onChange={(e) => setSlipStatusFilter(e.target.value)}
+                className="px-3 py-2 border border-border rounded-lg text-sm"
+              >
+                <option value="">ทุกสถานะ</option>
+                {(Object.keys(SLIP_STATUS_LABEL) as SlipStatus[]).map((st) => (
+                  <option key={st} value={st}>
+                    {SLIP_STATUS_LABEL[st]}
+                  </option>
+                ))}
+              </select>
+              {(slipQuery || slipStatusFilter) && (
+                <span className="text-xs text-muted">
+                  พบ {filteredSlips.length} จาก {slips.length} คน
+                </span>
+              )}
+            </div>
+            {filteredSlips.length === 0 ? (
+              <div className="p-12 text-center text-muted">ไม่พบพนักงานที่ตรงกับเงื่อนไขค้นหา</div>
+            ) : (
             <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[900px]">
               <thead className="bg-gray-50 border-b border-border">
@@ -316,7 +388,7 @@ export default function PayrollPeriodDetailPage() {
                   <th className="px-3 py-3 w-10">
                     <button
                       onClick={() =>
-                        setSelectedSlips(allChecked ? [] : slips.map((s) => s.id))
+                        setSelectedSlips(allChecked ? [] : filteredSlips.map((s) => s.id))
                       }
                       className="text-muted hover:text-foreground"
                     >
@@ -335,7 +407,7 @@ export default function PayrollPeriodDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {slips.map((s) => {
+                {filteredSlips.map((s) => {
                   const checked = selectedSlips.includes(s.id);
                   return (
                     <tr key={s.id} className="border-b border-border last:border-0 hover:bg-gray-50/50">
@@ -379,19 +451,20 @@ export default function PayrollPeriodDetailPage() {
               <tfoot className="bg-gray-50 border-t-2 border-border font-semibold">
                 <tr>
                   <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3 text-xs text-muted">รวมทั้งสิ้น ({slips.length} คน)</td>
-                  <td className="px-3 py-3 text-right">{fmtMoney(totals.base)}</td>
-                  <td className="px-3 py-3 text-right">{fmtMoney(totals.ot)}</td>
-                  <td className="px-3 py-3 text-right text-green-700">{fmtMoney(totals.allowances)}</td>
-                  <td className="px-3 py-3 text-right text-red-700">{fmtMoney(totals.deductions + totals.ssf)}</td>
-                  <td className="px-3 py-3 text-right">{fmtMoney(totals.tax)}</td>
-                  <td className="px-3 py-3 text-right text-primary-700">{fmtMoney(totals.net)}</td>
+                  <td className="px-3 py-3 text-xs text-muted">รวมทั้งสิ้น ({filteredSlips.length} คน)</td>
+                  <td className="px-3 py-3 text-right">{fmtMoney(filteredTotals.base)}</td>
+                  <td className="px-3 py-3 text-right">{fmtMoney(filteredTotals.ot)}</td>
+                  <td className="px-3 py-3 text-right text-green-700">{fmtMoney(filteredTotals.allowances)}</td>
+                  <td className="px-3 py-3 text-right text-red-700">{fmtMoney(filteredTotals.deductions + filteredTotals.ssf)}</td>
+                  <td className="px-3 py-3 text-right">{fmtMoney(filteredTotals.tax)}</td>
+                  <td className="px-3 py-3 text-right text-primary-700">{fmtMoney(filteredTotals.net)}</td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3"></td>
                 </tr>
               </tfoot>
             </table>
             </div>
+            )}
           </div>
         )}
       </div>

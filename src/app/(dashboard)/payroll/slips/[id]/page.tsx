@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
+import EmployeeAttendanceCalendarModal from "@/components/attendance/EmployeeAttendanceCalendarModal";
 import { apiFetch, ApiError } from "@/lib/api";
 import {
   fmtDate,
@@ -38,6 +39,7 @@ import {
   Receipt,
   RotateCcw,
   FileText,
+  CalendarDays,
 } from "lucide-react";
 
 type WorkOrderBrief = {
@@ -53,7 +55,7 @@ interface FullSlip extends Omit<PayrollSlip, "period"> {
   items?: PayrollSlipItem[];
   approvals?: PayrollApproval[];
   ot_sessions?: { id: number; name: string; work_date: string; pivot?: { hours: string; amount: string } }[];
-  period?: { id: number; name: string; code: string };
+  period?: { id: number; name: string; code: string; start_date?: string; end_date?: string };
   work_orders?: WorkOrderBrief[];
 }
 
@@ -67,6 +69,7 @@ export default function SlipDetailPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [depositPreview, setDepositPreview] = useState<{ count: number; total: number } | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   async function loadDepositPreview() {
     try {
@@ -296,7 +299,15 @@ export default function SlipDetailPage() {
 
         {/* Attendance summary */}
         <div className="bg-white rounded-xl border border-border p-5">
-          <h3 className="font-semibold mb-3">สรุปการมาทำงาน</h3>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <h3 className="font-semibold">สรุปการมาทำงาน</h3>
+            <button
+              onClick={() => setCalendarOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100"
+            >
+              <CalendarDays className="w-3.5 h-3.5" /> ดูปฏิทินการทำงาน
+            </button>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
             <KV label="วันทำงานในงวด" value={String(slip.working_days)} />
             <KV label="วันมาทำงาน" value={String(slip.present_days)} />
@@ -402,6 +413,18 @@ export default function SlipDetailPage() {
           </div>
         )}
       </div>
+
+      <EmployeeAttendanceCalendarModal
+        open={calendarOpen}
+        employee={
+          slip.employee
+            ? { id: slip.employee_id, code: slip.employee.employee_code, name: `${slip.employee.first_name} ${slip.employee.last_name}` }
+            : null
+        }
+        initialMonth={slip.period?.start_date ? slip.period.start_date.substring(0, 10) : undefined}
+        onClose={() => setCalendarOpen(false)}
+        onChanged={load}
+      />
     </>
   );
 }

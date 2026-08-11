@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus, Trash2, Loader2, Save } from "lucide-react";
 import Topbar from "@/components/Topbar";
+import EmployeeCombobox from "@/components/EmployeeCombobox";
 import { ApiError, apiFetch } from "@/lib/api";
 import type { Employee, GoodsDepositSlip, Paginated } from "@/lib/types";
 
@@ -140,18 +141,7 @@ export default function GoodsDepositForm({ initial }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-muted mb-1">พนักงาน *</label>
-              <select
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm bg-white"
-              >
-                <option value="">-- เลือกพนักงาน --</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.employee_code} - {e.first_name} {e.last_name}
-                  </option>
-                ))}
-              </select>
+              <EmployeeCombobox employees={employees} value={employeeId} onChange={setEmployeeId} />
             </div>
             <div>
               <label className="block text-xs font-medium text-muted mb-1">วันที่หยิบของ *</label>
