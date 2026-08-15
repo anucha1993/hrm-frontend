@@ -455,7 +455,7 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
               </div>
             </Field>
           ) : (
-            <Field label={salaryField.label}>
+            <Field label={`${salaryField.label} (อ้างอิง)`}>
               <div className="relative">
                 <input
                   type="number"
@@ -470,6 +470,17 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
                   {salaryField.unit}
                 </span>
               </div>
+              <p className="mt-1 text-xs text-muted leading-relaxed">
+                ค่านี้เก็บไว้เป็นข้อมูลอ้างอิง/นำเข้าเท่านั้น <strong>ไม่ถูกใช้คำนวณเงินเดือนจริง</strong>
+                {isEdit && canManageComp && (
+                  <>
+                    {" "}— กำหนดค่าที่ใช้คำนวณจริงได้ที่{" "}
+                    <Link href={`/employees/${employeeId}/compensation`} className="text-primary-600 underline hover:no-underline">
+                      หน้า &quot;ค่าจ้าง / โปรไฟล์&quot;
+                    </Link>
+                  </>
+                )}
+              </p>
             </Field>
           )}
           <Field label="สถานะ" required>

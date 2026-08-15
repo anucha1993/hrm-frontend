@@ -63,7 +63,12 @@ export default function EmployeeCompensationPage({ params }: { params: Promise<{
   function openCreate() {
     setEditing(null);
     const defaultProfile = profiles.find((p) => p.is_default) ?? profiles[0];
-    setForm({ ...empty, compensation_profile_id: defaultProfile ? String(defaultProfile.id) : "" });
+    setForm({
+      ...empty,
+      compensation_profile_id: defaultProfile ? String(defaultProfile.id) : "",
+      // เติมค่าเริ่มต้นจากเงินเดือนอ้างอิงในหน้าแก้ไขพนักงาน ถ้ายังไม่เคยมีประวัติค่าจ้างมาก่อน
+      base_salary: items.length === 0 && employee?.base_salary ? employee.base_salary : "",
+    });
     setErr(null);
     setShowForm(true);
   }
@@ -152,6 +157,13 @@ export default function EmployeeCompensationPage({ params }: { params: Promise<{
         {!canManage && (
           <div className="bg-amber-50 text-amber-700 text-sm rounded-lg p-3 flex items-center gap-2">
             <AlertCircle className="w-4 h-4" /> ไม่มีสิทธิ์แก้ไขค่าจ้าง (ดูได้อย่างเดียว)
+          </div>
+        )}
+
+        {employee?.base_salary && (
+          <div className="bg-blue-50 text-blue-700 text-sm rounded-lg p-3">
+            เงินเดือนอ้างอิงจากหน้าแก้ไขพนักงาน: <strong>{Number(employee.base_salary).toLocaleString()}</strong> บาท
+            {" "}(ใช้เป็นข้อมูลอ้างอิงเท่านั้น ค่าที่คำนวณเงินเดือนจริงคือประวัติค่าจ้างด้านล่าง)
           </div>
         )}
 
