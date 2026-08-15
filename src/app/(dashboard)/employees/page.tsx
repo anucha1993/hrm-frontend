@@ -3,7 +3,7 @@
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
 import Link from "next/link";
-import { Plus, Search, Edit2, Trash2, Loader2, Upload } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Loader2, Upload, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -22,6 +22,7 @@ export default function EmployeesPage() {
   const canCreate = hasPermission("employees.create");
   const canUpdate = hasPermission("employees.update");
   const canDelete = hasPermission("employees.delete");
+  const canManageComp = hasPermission("payroll.config");
 
   const [items, setItems] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -253,6 +254,16 @@ export default function EmployeesPage() {
                                 </Link>
                               ) : (
                                 <span className="text-xs text-muted px-2">-</span>
+                              )}
+                              {canManageComp && (
+                                <Link
+                                  href={`/employees/${e.id}/compensation`}
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-primary-50 text-primary-600 text-xs font-medium"
+                                  title="ค่าจ้าง"
+                                >
+                                  <Wallet className="w-3.5 h-3.5" />
+                                  ค่าจ้าง
+                                </Link>
                               )}
                               {canDelete && (
                                 <button

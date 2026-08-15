@@ -103,6 +103,7 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
   const { hasPermission } = useAuth();
   const isEdit = !!employeeId;
   const canImportLabour = hasPermission("labours.view");
+  const canManageComp = hasPermission("payroll.config");
 
   const [form, setForm] = useState<FormState>(empty);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -269,6 +270,14 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
           >
             <Database className="w-4 h-4" /> นำเข้าจาก Labour API
           </button>
+        )}
+        {isEdit && canManageComp && (
+          <Link
+            href={`/employees/${employeeId}/compensation`}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-white text-sm font-semibold text-foreground hover:bg-surface"
+          >
+            ค่าจ้าง / โปรไฟล์
+          </Link>
         )}
       </div>
 
