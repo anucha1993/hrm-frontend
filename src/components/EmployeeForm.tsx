@@ -88,15 +88,6 @@ const empty: FormState = {
   note: "",
 };
 
-// ป้ายชื่อ/หน่วย ของช่องค่าจ้าง ตามประเภทการจ้าง (อิงรหัส code ของ EmploymentType)
-// PIECEWORK (จ้างตามชิ้นงาน) ไม่มีใน map → ซ่อนช่องค่าจ้าง (จ่ายตามเรทการผลิต)
-const SALARY_FIELD_BY_CODE: Record<string, { label: string; unit: string; placeholder: string }> = {
-  MONTHLY:  { label: "เงินเดือน", unit: "บาท/เดือน", placeholder: "เช่น 15000" },
-  DAILY:    { label: "ค่าจ้างรายวัน", unit: "บาท/วัน", placeholder: "เช่น 400" },
-  HOURLY:   { label: "ค่าจ้างรายชั่วโมง", unit: "บาท/ชม.", placeholder: "เช่น 60" },
-  CONTRACT: { label: "ค่าจ้างตามสัญญา", unit: "บาท", placeholder: "เช่น 30000" },
-  INTERN:   { label: "เบี้ยเลี้ยง/ค่าตอบแทน", unit: "บาท", placeholder: "เช่น 300" },
-};
 
 export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
   const router = useRouter();
@@ -241,15 +232,6 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
     );
   }
 
-  // ช่องค่าจ้างปรับตามประเภทการจ้างที่เลือก
-  const selectedType = types.find((t) => String(t.id) === form.employment_type_id);
-  const typeCode = selectedType?.code ?? "";
-  const isPiecework = typeCode === "PIECEWORK";
-  const salaryField = SALARY_FIELD_BY_CODE[typeCode] ?? {
-    label: "เงินเดือนพื้นฐาน",
-    unit: "บาท",
-    placeholder: "",
-  };
 
   return (
     <div className="p-6 space-y-6">
@@ -412,13 +394,7 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
           <Field label="ประเภทการจ้าง">
             <select
               value={form.employment_type_id}
-              onChange={(e) => {
-                const id = e.target.value;
-                set("employment_type_id", id);
-                // จ้างตามชิ้นงานไม่มีเงินเดือน/ค่าจ้างประจำ → ล้างค่า
-                const t = types.find((x) => String(x.id) === id);
-                if (t?.code === "PIECEWORK") set("base_salary", "");
-              }}
+              onChange={(e) => set("employment_type_id", e.target.value)}
               className={input}
             >
               <option value="">-</option>
@@ -448,39 +424,14 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
               className={input}
             />
           </Field>
-          {isPiecework ? (
+          {isEdit && canManageComp && (
             <Field label="ค่าจ้าง">
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 leading-relaxed">
-                จ้างตามชิ้นงาน (งานเหมา) — จ่ายตามเรทค่าจ้างการผลิต ไม่มีเงินเดือน/ค่าจ้างประจำ
-              </div>
-            </Field>
-          ) : (
-            <Field label={`${salaryField.label} (อ้างอิง)`}>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.base_salary}
-                  onChange={(e) => set("base_salary", e.target.value)}
-                  placeholder={salaryField.placeholder}
-                  className={`${input} pr-16`}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted pointer-events-none">
-                  {salaryField.unit}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-muted leading-relaxed">
-                ค่านี้เก็บไว้เป็นข้อมูลอ้างอิง/นำเข้าเท่านั้น <strong>ไม่ถูกใช้คำนวณเงินเดือนจริง</strong>
-                {isEdit && canManageComp && (
-                  <>
-                    {" "}— กำหนดค่าที่ใช้คำนวณจริงได้ที่{" "}
-                    <Link href={`/employees/${employeeId}/compensation`} className="text-primary-600 underline hover:no-underline">
-                      หน้า &quot;ค่าจ้าง / โปรไฟล์&quot;
-                    </Link>
-                  </>
-                )}
-              </p>
+              <Link
+                href={`/employees/${employeeId}/compensation`}
+                className="inline-flex items-center gap-1 text-sm text-primary-600 underline hover:no-underline"
+              >
+                จัดการที่หน้า &quot;ค่าจ้าง / โปรไฟล์&quot;
+              </Link>
             </Field>
           )}
           <Field label="สถานะ" required>
