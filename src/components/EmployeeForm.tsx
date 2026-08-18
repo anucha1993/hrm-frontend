@@ -34,6 +34,7 @@ type FormState = {
   email: string;
   address: string;
   national_id: string;
+  hip_enroll_number: string;
   marital_status: string;
   religion: string;
   education_level: string;
@@ -67,6 +68,7 @@ const empty: FormState = {
   email: "",
   address: "",
   national_id: "",
+  hip_enroll_number: "",
   marital_status: "",
   religion: "",
   education_level: "",
@@ -151,6 +153,7 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
         email: e.email ?? "",
         address: e.address ?? "",
         national_id: e.national_id,
+        hip_enroll_number: e.hip_enroll_number ?? "",
         marital_status: e.marital_status ?? "",
         religion: e.religion ?? "",
         education_level: e.education_level ?? "",
@@ -327,6 +330,14 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
           </Field>
           <Field label="โทรศัพท์">
             <input value={form.phone} onChange={(e) => set("phone", e.target.value)} className={input} />
+          </Field>
+          <Field label="รหัสเครื่องสแกน HIP Time">
+            <input
+              value={form.hip_enroll_number}
+              onChange={(e) => set("hip_enroll_number", e.target.value)}
+              className={input}
+              placeholder="enrollnumber ในเครื่องสแกนลายนิ้วมือ"
+            />
           </Field>
           <Field label="อีเมล">
             <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={input} />

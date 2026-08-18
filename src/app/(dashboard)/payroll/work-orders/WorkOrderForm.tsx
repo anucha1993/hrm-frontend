@@ -891,7 +891,7 @@ export default function WorkOrderForm({
         <div className="bg-white rounded-xl border border-border">
           <div className="px-4 py-3 border-b border-border flex justify-between items-center">
             <h3 className="font-semibold text-sm flex items-center gap-2">
-              <Coins className="w-4 h-4 text-amber-600" /> รายการจ่ายเพิ่มเติม ({(form.extras ?? []).length} รายการ)
+              <Coins className="w-4 h-4 text-amber-600" /> รายการจ่าย-หักเพิ่มเติม ({(form.extras ?? []).length} รายการ)
             </h3>
             <div className="flex items-center gap-3">
               <span className="text-xs text-muted">
@@ -906,7 +906,7 @@ export default function WorkOrderForm({
             </div>
           </div>
           {(form.extras ?? []).length === 0 ? (
-            <div className="p-6 text-center text-muted text-sm">— ไม่มีรายการเพิ่มเติม (เช่น หูแพแผ่นพื้น, ค่าขนส่ง ฯลฯ) —</div>
+            <div className="p-6 text-center text-muted text-sm">— ไม่มีรายการจ่าย-หักเพิ่มเติม (เช่น หูแพแผ่นพื้น, ค่าขนส่ง, หักค่าเสียหาย — ใส่ราคา/หน่วยติดลบสำหรับรายการหัก ฯลฯ) —</div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-border">
@@ -942,10 +942,10 @@ export default function WorkOrderForm({
                           value={e.qty} onChange={(ev) => updateExtra(idx, { qty: ev.target.value })} />
                       </td>
                       <td className="px-3 py-2">
-                        <input type="number" step="0.01" min="0" disabled={readOnly} className="payroll-input text-right"
+                        <input type="number" step="0.01" disabled={readOnly} className="payroll-input text-right"
                           value={e.rate} onChange={(ev) => updateExtra(idx, { rate: ev.target.value })} />
                       </td>
-                      <td className="px-3 py-2 text-right font-semibold text-amber-700 tabular-nums">
+                      <td className={`px-3 py-2 text-right font-semibold tabular-nums ${lineAmount < 0 ? "text-red-600" : "text-amber-700"}`}>
                         {fmtMoney(lineAmount)}
                       </td>
                       <td className="px-3 py-2">

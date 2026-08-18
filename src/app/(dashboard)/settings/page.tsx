@@ -1,7 +1,7 @@
 "use client";
 
 import Topbar from "@/components/Topbar";
-import { Building, Users, Shield, Bell, Database, Globe } from "lucide-react";
+import { Building, Users, Shield, Bell, Database, Globe, Fingerprint } from "lucide-react";
 import Link from "next/link";
 
 const settingSections = [
@@ -11,6 +11,13 @@ const settingSections = [
     icon: Building,
     color: "bg-primary-50 text-primary-600 border-primary-100",
     href: "/settings/company",
+  },
+  {
+    title: "ช่วงเวลาสแกน HIP Time",
+    description: "กำหนดช่วงเวลาที่นับเป็นเข้างาน/ออกงานสำหรับเครื่องสแกนลายนิ้วมือ",
+    icon: Fingerprint,
+    color: "bg-teal-50 text-teal-600 border-teal-100",
+    href: "/settings/hiptime",
   },
   {
     title: "จัดการผู้ใช้งาน",

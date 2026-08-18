@@ -3,64 +3,66 @@
 import { useEffect, useState, useCallback } from "react";
 import Badge from "@/components/Badge";
 import { apiFetch, apiDownload, ApiError } from "@/lib/api";
-import { Attendance, AttendanceAuditLog, Employee, WorkShift, OfficeLocation, Department } from "@/lib/types";
-import { LogIn, LogOut, MapPin, AlertTriangle, Image as ImageIcon, X, Filter, RefreshCw, Plus, Edit2, Trash2, History, Loader2, Wand2, Download, Upload } from "lucide-react";
+import { Attendance, AttendanceAuditLog, AttendanceRosterRow, Employee, WorkShift, OfficeLocation, Department } from "@/lib/types";
+import { LogIn, LogOut, AlertTriangle, X, Filter, RefreshCw, Plus, Edit2, Trash2, History, Loader2, Wand2, Download, Upload, Fingerprint } from "lucide-react";
 import AttendanceImportModal from "@/components/attendance/AttendanceImportModal";
 import EmployeeCombobox from "@/components/EmployeeCombobox";
 
-type Paginated<T> = {
-  data: T[];
-  meta?: { current_page: number; last_page: number; total: number; per_page: number };
-  current_page?: number;
-  last_page?: number;
-  total?: number;
-  per_page?: number;
-};
-
-function statusInfo(s: Attendance["status"]) {
-  const map: Record<Attendance["status"], { label: string; variant: "success" | "warning" | "danger" | "info" }> = {
+function dayStatusInfo(s: AttendanceRosterRow["day_status"]) {
+  const map: Record<AttendanceRosterRow["day_status"], { label: string; variant: "success" | "warning" | "danger" | "info" | "default" }> = {
     normal: { label: "ปกติ", variant: "success" },
     late: { label: "สาย", variant: "warning" },
-    early_leave: { label: "ออกก่อน", variant: "warning" },
+    early_leave: { label: "ออกก่อนเวลา", variant: "warning" },
     overtime: { label: "ทำงานล่วงเวลา", variant: "info" },
+    leave: { label: "ลา", variant: "info" },
+    holiday: { label: "วันหยุด", variant: "default" },
+    day_off: { label: "วันหยุดประจำสัปดาห์", variant: "default" },
+    absent: { label: "ขาดงาน", variant: "danger" },
+    upcoming: { label: "ยังไม่ถึงวัน", variant: "default" },
   };
   return map[s] || map.normal;
 }
 
+const ALL_DAY_STATUSES: AttendanceRosterRow["day_status"][] = [
+  "normal", "late", "early_leave", "overtime", "leave", "holiday", "day_off", "absent", "upcoming",
+];
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+}
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 }
 function todayStr() {
   return new Date().toISOString().substring(0, 10);
 }
-function daysAgoStr(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().substring(0, 10);
-}
+
+type EditTarget = {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  type: "check_in" | "check_out";
+  checked_at: string;
+};
 
 export default function AttendanceManagePage() {
-  const [items, setItems] = useState<Attendance[]>([]);
-  const [meta, setMeta] = useState<{ current_page: number; last_page: number; total: number } | null>(null);
+  const [rows, setRows] = useState<AttendanceRosterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState<string>("");
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentId, setDepartmentId] = useState<string>("");
-  const [type, setType] = useState<string>("");
-  const [from, setFrom] = useState(daysAgoStr(7));
-  const [to, setTo] = useState(todayStr());
-  const [page, setPage] = useState(1);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<AttendanceRosterRow["day_status"] | "">("");
+  const [date, setDate] = useState(todayStr());
   const [importOpen, setImportOpen] = useState(false);
 
   // ===== Manual entry / edit / delete / audit =====
   const [shifts, setShifts] = useState<WorkShift[]>([]);
   const [offices, setOffices] = useState<OfficeLocation[]>([]);
-  const [editTarget, setEditTarget] = useState<Attendance | null>(null);
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [showDelete, setShowDelete] = useState<Attendance | null>(null);
-  const [auditTarget, setAuditTarget] = useState<Attendance | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<EditTarget | null>(null);
+  const [auditTarget, setAuditTarget] = useState<{ id: number } | null>(null);
   const [auditLogs, setAuditLogs] = useState<AttendanceAuditLog[]>([]);
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
@@ -81,30 +83,17 @@ export default function AttendanceManagePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ from, to, page: page.toString(), per_page: "30" });
+      const params = new URLSearchParams({ date });
       if (employeeId) params.set("employee_id", employeeId);
       if (departmentId) params.set("department_id", departmentId);
-      if (type) params.set("type", type);
-      const res = await apiFetch<{ data: Paginated<Attendance> } | Paginated<Attendance>>(`/attendance?${params.toString()}`);
-      // backend wraps: { data: paginator }
-      const paginator: Paginated<Attendance> =
-        (res as { data: Paginated<Attendance> }).data && Array.isArray(((res as { data: Paginated<Attendance> }).data as Paginated<Attendance>).data)
-          ? (res as { data: Paginated<Attendance> }).data
-          : (res as Paginated<Attendance>);
-      setItems(paginator.data || []);
-      const m = paginator.meta || {
-        current_page: paginator.current_page || 1,
-        last_page: paginator.last_page || 1,
-        total: paginator.total || 0,
-        per_page: paginator.per_page || 30,
-      };
-      setMeta({ current_page: m.current_page, last_page: m.last_page, total: m.total });
+      const res = await apiFetch<{ data: { date: string; rows: AttendanceRosterRow[] } }>(`/attendance/roster?${params.toString()}`);
+      setRows(res.data.rows || []);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [from, to, page, employeeId, departmentId, type]);
+  }, [date, employeeId, departmentId]);
 
   useEffect(() => {
     apiFetch<{ data: { data: Employee[] } | Employee[] } | Employee[]>("/employees?per_page=500")
@@ -136,23 +125,39 @@ export default function AttendanceManagePage() {
     load();
   }, [load]);
 
-  function openCreate() {
-    setForm({ ...blankForm, checked_at: new Date().toISOString().slice(0, 16) });
+  const filteredRows = statusFilter ? rows.filter((r) => r.day_status === statusFilter) : rows;
+
+  function openCreate(row?: AttendanceRosterRow, type: "check_in" | "check_out" = "check_in") {
+    setForm({
+      ...blankForm,
+      employee_id: row ? String(row.employee.id) : "",
+      type,
+      checked_at: `${date}T${type === "check_in" ? "08:00" : "17:00"}`,
+      work_shift_id: row?.shift ? String(row.shift.id) : "",
+    });
     setFormErr(null);
     setShowCreate(true);
   }
 
-  function openEdit(a: Attendance) {
-    setEditTarget(a);
+  function openEdit(row: AttendanceRosterRow, type: "check_in" | "check_out") {
+    const entry = type === "check_in" ? row.check_in : row.check_out;
+    if (!entry) return;
+    setEditTarget({
+      id: entry.id,
+      employeeId: row.employee.id,
+      employeeName: `${row.employee.first_name} ${row.employee.last_name}`,
+      type,
+      checked_at: entry.checked_at,
+    });
     setForm({
-      employee_id: String(a.employee_id),
-      type: a.type,
-      checked_at: a.checked_at ? new Date(a.checked_at).toISOString().slice(0, 16) : "",
-      work_shift_id: a.work_shift_id ? String(a.work_shift_id) : "",
-      office_location_id: a.office_location_id ? String(a.office_location_id) : "",
-      status: a.status,
-      late_minutes: a.late_minutes != null ? String(a.late_minutes) : "",
-      note: a.note ?? "",
+      employee_id: String(row.employee.id),
+      type,
+      checked_at: new Date(entry.checked_at).toISOString().slice(0, 16),
+      work_shift_id: row.shift ? String(row.shift.id) : "",
+      office_location_id: "",
+      status: entry.status,
+      late_minutes: entry.late_minutes != null ? String(entry.late_minutes) : "",
+      note: "",
       reason: "",
     });
     setFormErr(null);
@@ -192,15 +197,15 @@ export default function AttendanceManagePage() {
   }
 
   async function submitDelete() {
-    if (!showDelete) return;
+    if (!deleteTarget) return;
     setBusy(true);
     setFormErr(null);
     try {
-      await apiFetch(`/attendance/${showDelete.id}`, {
+      await apiFetch(`/attendance/${deleteTarget.id}`, {
         method: "DELETE",
         body: { reason: form.reason },
       });
-      setShowDelete(null);
+      setDeleteTarget(null);
       setForm(blankForm);
       await load();
     } catch (e: unknown) {
@@ -210,11 +215,11 @@ export default function AttendanceManagePage() {
     }
   }
 
-  async function openAudit(a: Attendance) {
-    setAuditTarget(a);
+  async function openAudit(id: number) {
+    setAuditTarget({ id });
     setAuditLogs([]);
     try {
-      const res = await apiFetch<{ data: AttendanceAuditLog[] }>(`/attendance/${a.id}/audit-logs`);
+      const res = await apiFetch<{ data: AttendanceAuditLog[] }>(`/attendance/${id}/audit-logs`);
       setAuditLogs(res.data);
     } catch {
       // ignore
@@ -226,14 +231,14 @@ export default function AttendanceManagePage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold">จัดการเวลาทำงาน</h2>
-          <p className="text-sm text-muted">ดูภาพรวมการลงเวลาเข้า-ออกของพนักงานทั้งหมด</p>
+          <p className="text-sm text-muted">ภาพรวมพนักงานทั้งหมด — 1 คน 1 แถวต่อวัน (เข้างาน/ออกงาน/ลา/ขาด/วันหยุด)</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={async () => {
               try {
-                await apiDownload(`/attendance/export`, `attendance-history-${from}-to-${to}.xlsx`, {
-                  params: { from, to, employee_id: employeeId || undefined, department_id: departmentId || undefined, type: type || undefined },
+                await apiDownload(`/attendance/export`, `attendance-history-${date}.xlsx`, {
+                  params: { from: date, to: date, employee_id: employeeId || undefined, department_id: departmentId || undefined },
                 });
               } catch (e) {
                 alert(e instanceof Error ? e.message : "ดาวน์โหลดไม่สำเร็จ");
@@ -252,7 +257,7 @@ export default function AttendanceManagePage() {
             <span className="hidden sm:inline">นำเข้า</span>
           </button>
           <button
-            onClick={openCreate}
+            onClick={() => openCreate()}
             className="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-lg text-sm font-semibold hover:from-primary-600 hover:to-accent-600"
           >
             <Plus className="w-4 h-4" />
@@ -274,13 +279,13 @@ export default function AttendanceManagePage() {
           <Filter className="w-4 h-4" />
           ตัวกรอง
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
           <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs font-medium text-muted mb-1">พนักงาน</label>
             <EmployeeCombobox
               employees={employees}
               value={employeeId}
-              onChange={(id) => { setPage(1); setEmployeeId(id); }}
+              onChange={(id) => setEmployeeId(id)}
               placeholder="ทั้งหมด"
               clearLabel="ทั้งหมด"
               className="w-full px-3 py-2 pr-8 border border-border rounded-lg text-sm"
@@ -290,7 +295,7 @@ export default function AttendanceManagePage() {
             <label className="block text-xs font-medium text-muted mb-1">แผนก</label>
             <select
               value={departmentId}
-              onChange={(e) => { setPage(1); setDepartmentId(e.target.value); }}
+              onChange={(e) => setDepartmentId(e.target.value)}
               className="w-full px-3 py-2 border border-border rounded-lg text-sm"
             >
               <option value="">ทั้งหมด</option>
@@ -302,38 +307,32 @@ export default function AttendanceManagePage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">ประเภท</label>
+            <label className="block text-xs font-medium text-muted mb-1">สถานะ</label>
             <select
-              value={type}
-              onChange={(e) => { setPage(1); setType(e.target.value); }}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as AttendanceRosterRow["day_status"] | "")}
               className="w-full px-3 py-2 border border-border rounded-lg text-sm"
             >
               <option value="">ทั้งหมด</option>
-              <option value="check_in">เข้างาน</option>
-              <option value="check_out">เลิกงาน</option>
+              {ALL_DAY_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {dayStatusInfo(s).label}
+                </option>
+              ))}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">ตั้งแต่</label>
+            <label className="block text-xs font-medium text-muted mb-1">วันที่</label>
             <input
               type="date"
-              value={from}
-              onChange={(e) => { setPage(1); setFrom(e.target.value); }}
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">ถึง</label>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => { setPage(1); setTo(e.target.value); }}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
               className="w-full px-3 py-2 border border-border rounded-lg text-sm"
             />
           </div>
           <div className="flex items-end">
             <button
-              onClick={() => { setPage(1); load(); }}
+              onClick={() => load()}
               className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-semibold hover:bg-primary-700"
             >
               ค้นหา
@@ -350,94 +349,91 @@ export default function AttendanceManagePage() {
               <tr>
                 <th className="px-4 py-3 text-left font-semibold">พนักงาน</th>
                 <th className="px-4 py-3 text-left font-semibold">แผนก</th>
-                <th className="px-4 py-3 text-left font-semibold">ประเภท</th>
-                <th className="px-4 py-3 text-left font-semibold">เวลา</th>
+                <th className="px-4 py-3 text-left font-semibold">เข้างาน</th>
+                <th className="px-4 py-3 text-left font-semibold">ออกงาน</th>
                 <th className="px-4 py-3 text-left font-semibold">สถานะ</th>
-                <th className="px-4 py-3 text-left font-semibold">สถานที่</th>
-                <th className="px-4 py-3 text-center font-semibold">ภาพ</th>
-                <th className="px-4 py-3 text-center font-semibold">การจัดการ</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted">กำลังโหลด...</td></tr>
-              ) : items.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted">ไม่พบข้อมูล</td></tr>
-              ) : items.map((a) => {
-                const s = statusInfo(a.status);
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted">กำลังโหลด...</td></tr>
+              ) : filteredRows.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted">ไม่พบข้อมูลพนักงาน</td></tr>
+              ) : filteredRows.map((row) => {
+                const ds = dayStatusInfo(row.day_status);
                 return (
-                  <tr key={a.id} className="border-b border-border hover:bg-gray-50">
+                  <tr key={row.employee.id} className="border-b border-border hover:bg-gray-50">
                     <td className="px-4 py-3">
-                      <div className="font-medium">{a.employee?.first_name} {a.employee?.last_name}</div>
-                      <div className="text-xs text-muted">{a.employee?.employee_code}</div>
+                      <div className="font-medium">{row.employee.first_name} {row.employee.last_name}</div>
+                      <div className="text-xs text-muted">{row.employee.employee_code}</div>
                     </td>
                     <td className="px-4 py-3">
-                      {a.employee?.department?.name
-                        ? <span className="text-sm">{a.employee.department.name}</span>
+                      {row.employee.department?.name
+                        ? <span className="text-sm">{row.employee.department.name}</span>
                         : <span className="text-xs text-muted italic">ไม่ระบุ</span>}
                     </td>
                     <td className="px-4 py-3">
-                      {a.type === "check_in" ? (
-                        <span className="inline-flex items-center gap-1 text-emerald-700"><LogIn className="w-4 h-4" /> เข้างาน</span>
+                      {row.check_in ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 text-emerald-700"><LogIn className="w-4 h-4" /> {fmtTime(row.check_in.checked_at)}</span>
+                          {row.check_in.late_minutes ? <span className="text-xs text-muted">({row.check_in.late_minutes} นาที)</span> : null}
+                          {row.check_in.source === "manual" ? (
+                            <Wand2 className="w-3 h-3 text-amber-600" title="เพิ่มย้อนหลังโดย HR" />
+                          ) : (
+                            <Fingerprint className="w-3 h-3 text-teal-600" title="ซิงค์อัตโนมัติจากเครื่องสแกน HIP Time" />
+                          )}
+                          <button onClick={() => openEdit(row, "check_in")} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="แก้ไข">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => openAudit(row.check_in!.id)} className="p-1 text-gray-500 hover:bg-gray-100 rounded" title="ประวัติ">
+                            <History className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget({ id: row.check_in!.id, employeeId: row.employee.id, employeeName: `${row.employee.first_name} ${row.employee.last_name}`, type: "check_in", checked_at: row.check_in!.checked_at })}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            title="ลบ"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-rose-700"><LogOut className="w-4 h-4" /> เลิกงาน</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">{fmtDateTime(a.checked_at)}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={s.variant} label={s.label} />
-                      {a.late_minutes ? <span className="ml-1 text-xs text-muted">({a.late_minutes} นาที)</span> : null}
-                      {a.source === "manual" && (
-                        <span className="ml-1 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800" title="เพิ่มย้อนหลังโดย HR">
-                          <Wand2 className="w-2.5 h-2.5" /> manual
-                        </span>
-                      )}
-                      {a.is_edited && a.source !== "manual" && (
-                        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800" title="แก้ไขแล้ว">edited</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 text-xs">
-                        <MapPin className="w-3 h-3 text-muted" />
-                        {a.office_location?.name || <span className="text-muted italic">ไม่ระบุสถานที่</span>}
-                        {a.outside_geofence && (
-                          <span className="inline-flex items-center gap-1 text-amber-600 ml-1">
-                            <AlertTriangle className="w-3 h-3" /> นอกพื้นที่
-                          </span>
-                        )}
-                      </div>
-                      {a.distance_m !== null && (
-                        <div className="text-xs text-muted">ห่าง {a.distance_m} ม.</div>
-                      )}
-                      {a.latitude !== null && a.longitude !== null && (
-                        <a
-                          href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary-600 hover:underline inline-flex items-center gap-1 mt-0.5"
-                          title="เปิดใน Google Maps"
-                        >
-                          {Number(a.latitude).toFixed(5)}, {Number(a.longitude).toFixed(5)}
-                        </a>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {a.photo_url ? (
-                        <button onClick={() => setPreview(a.photo_url)} className="inline-flex p-1.5 rounded hover:bg-gray-100">
-                          <ImageIcon className="w-4 h-4 text-primary-600" />
+                        <button onClick={() => openCreate(row, "check_in")} className="inline-flex items-center gap-1 text-xs text-muted hover:text-primary-600" title="เพิ่มเวลาเข้างาน">
+                          <Plus className="w-3.5 h-3.5" /> เพิ่ม
                         </button>
-                      ) : <span className="text-muted">-</span>}
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-center whitespace-nowrap">
-                      <button onClick={() => openEdit(a)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="แก้ไข">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => openAudit(a)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded" title="ประวัติการแก้ไข">
-                        <History className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => { setShowDelete(a); setForm({ ...blankForm, reason: "" }); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="ลบ">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <td className="px-4 py-3">
+                      {row.check_out ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 text-rose-700"><LogOut className="w-4 h-4" /> {fmtTime(row.check_out.checked_at)}</span>
+                          {row.check_out.source === "manual" ? (
+                            <Wand2 className="w-3 h-3 text-amber-600" title="เพิ่มย้อนหลังโดย HR" />
+                          ) : (
+                            <Fingerprint className="w-3 h-3 text-teal-600" title="ซิงค์อัตโนมัติจากเครื่องสแกน HIP Time" />
+                          )}
+                          <button onClick={() => openEdit(row, "check_out")} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="แก้ไข">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => openAudit(row.check_out!.id)} className="p-1 text-gray-500 hover:bg-gray-100 rounded" title="ประวัติ">
+                            <History className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget({ id: row.check_out!.id, employeeId: row.employee.id, employeeName: `${row.employee.first_name} ${row.employee.last_name}`, type: "check_out", checked_at: row.check_out!.checked_at })}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            title="ลบ"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => openCreate(row, "check_out")} className="inline-flex items-center gap-1 text-xs text-muted hover:text-primary-600" title="เพิ่มเวลาออกงาน">
+                          <Plus className="w-3.5 h-3.5" /> เพิ่ม
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={ds.variant} label={ds.label} />
+                      {row.leave && <div className="text-xs text-muted mt-0.5">{row.leave.type}{row.leave.is_half_day ? " (ครึ่งวัน)" : ""}</div>}
                     </td>
                   </tr>
                 );
@@ -450,85 +446,53 @@ export default function AttendanceManagePage() {
         <div className="md:hidden divide-y divide-border">
           {loading ? (
             <div className="px-4 py-8 text-center text-muted">กำลังโหลด...</div>
-          ) : items.length === 0 ? (
-            <div className="px-4 py-8 text-center text-muted">ไม่พบข้อมูล</div>
-          ) : items.map((a) => {
-            const s = statusInfo(a.status);
+          ) : filteredRows.length === 0 ? (
+            <div className="px-4 py-8 text-center text-muted">ไม่พบข้อมูลพนักงาน</div>
+          ) : filteredRows.map((row) => {
+            const ds = dayStatusInfo(row.day_status);
             return (
-              <div key={a.id} className="px-4 py-3">
+              <div key={row.employee.id} className="px-4 py-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="font-medium text-sm">{a.employee?.first_name} {a.employee?.last_name}</div>
-                    <div className="text-xs text-muted">{a.employee?.employee_code}{a.employee?.department?.name ? ` · ${a.employee.department.name}` : ""}</div>
+                    <div className="font-medium text-sm">{row.employee.first_name} {row.employee.last_name}</div>
+                    <div className="text-xs text-muted">{row.employee.employee_code}{row.employee.department?.name ? ` · ${row.employee.department.name}` : ""}</div>
                   </div>
-                  {a.type === "check_in" ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-700 text-xs"><LogIn className="w-3 h-3" />เข้า</span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-rose-700 text-xs"><LogOut className="w-3 h-3" />ออก</span>
-                  )}
+                  <Badge variant={ds.variant} label={ds.label} />
                 </div>
-                <div className="mt-1 text-xs text-muted">{fmtDateTime(a.checked_at)}</div>
-                <div className="mt-2 flex items-center gap-2 flex-wrap">
-                  <Badge variant={s.variant} label={s.label} />
-                  {a.outside_geofence && (
-                    <span className="inline-flex items-center gap-1 text-amber-600 text-xs">
-                      <AlertTriangle className="w-3 h-3" /> นอกพื้นที่
-                    </span>
+                <div className="mt-2 flex items-center gap-3 flex-wrap text-xs">
+                  <span className="inline-flex items-center gap-1 text-emerald-700">
+                    <LogIn className="w-3.5 h-3.5" />
+                    {row.check_in ? fmtTime(row.check_in.checked_at) : (
+                      <button onClick={() => openCreate(row, "check_in")} className="text-muted underline">เพิ่ม</button>
+                    )}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-rose-700">
+                    <LogOut className="w-3.5 h-3.5" />
+                    {row.check_out ? fmtTime(row.check_out.checked_at) : (
+                      <button onClick={() => openCreate(row, "check_out")} className="text-muted underline">เพิ่ม</button>
+                    )}
+                  </span>
+                  {row.leave && <span className="text-muted">{row.leave.type}{row.leave.is_half_day ? " (ครึ่งวัน)" : ""}</span>}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  {row.check_in && (
+                    <>
+                      <button onClick={() => openEdit(row, "check_in")} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Edit2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setDeleteTarget({ id: row.check_in!.id, employeeId: row.employee.id, employeeName: `${row.employee.first_name} ${row.employee.last_name}`, type: "check_in", checked_at: row.check_in!.checked_at })} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </>
                   )}
-                  {a.office_location?.name && (
-                    <span className="inline-flex items-center gap-1 text-xs text-muted">
-                      <MapPin className="w-3 h-3" /> {a.office_location.name}
-                    </span>
-                  )}
-                  {!a.office_location?.name && a.latitude !== null && a.longitude !== null && (
-                    <a
-                      href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary-600"
-                    >
-                      <MapPin className="w-3 h-3" /> {Number(a.latitude).toFixed(4)}, {Number(a.longitude).toFixed(4)}
-                    </a>
-                  )}
-                  {a.photo_url && (
-                    <button onClick={() => setPreview(a.photo_url)} className="inline-flex items-center gap-1 text-xs text-primary-600 ml-auto">
-                      <ImageIcon className="w-3 h-3" /> ดูภาพ
-                    </button>
+                  {row.check_out && (
+                    <>
+                      <button onClick={() => openEdit(row, "check_out")} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Edit2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setDeleteTarget({ id: row.check_out!.id, employeeId: row.employee.id, employeeName: `${row.employee.first_name} ${row.employee.last_name}`, type: "check_out", checked_at: row.check_out!.checked_at })} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </>
                   )}
                 </div>
               </div>
             );
           })}
         </div>
-
-        {/* Pagination */}
-        {meta && meta.last_page > 1 && (
-          <div className="px-4 py-3 border-t border-border flex items-center justify-between text-sm">
-            <span className="text-muted">หน้า {meta.current_page} / {meta.last_page} (รวม {meta.total} รายการ)</span>
-            <div className="flex gap-2">
-              <button
-                disabled={meta.current_page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1 border border-border rounded disabled:opacity-50"
-              >ก่อนหน้า</button>
-              <button
-                disabled={meta.current_page >= meta.last_page}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1 border border-border rounded disabled:opacity-50"
-              >ถัดไป</button>
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* Image preview */}
-      {preview && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
-          <button className="absolute top-4 right-4 text-white p-2"><X className="w-6 h-6" /></button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="attendance" className="max-w-full max-h-full rounded-lg" />
-        </div>
-      )}
 
       {/* Import modal */}
       <AttendanceImportModal open={importOpen} onClose={() => setImportOpen(false)} onSuccess={load} />
@@ -539,7 +503,7 @@ export default function AttendanceManagePage() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h3 className="font-semibold">
-                {showCreate ? "เพิ่มเวลาย้อนหลัง" : `แก้ไขเวลา #${editTarget?.id}`}
+                {showCreate ? "เพิ่มเวลาย้อนหลัง" : `แก้ไขเวลา — ${editTarget?.employeeName}`}
               </h3>
               <button onClick={() => { setShowCreate(false); setEditTarget(null); }} className="text-muted hover:text-foreground">
                 <X className="w-5 h-5" />
@@ -627,7 +591,7 @@ export default function AttendanceManagePage() {
       )}
 
       {/* Delete confirmation */}
-      {showDelete && (
+      {deleteTarget && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="px-5 py-4 border-b border-border">
@@ -635,9 +599,9 @@ export default function AttendanceManagePage() {
             </div>
             <div className="p-5 space-y-3">
               <p className="text-sm">
-                ลบบันทึกเวลา <strong>{showDelete.type === "check_in" ? "เข้างาน" : "เลิกงาน"}</strong> ของ{" "}
-                <strong>{showDelete.employee?.first_name} {showDelete.employee?.last_name}</strong>{" "}
-                เมื่อ {fmtDateTime(showDelete.checked_at)}?
+                ลบบันทึกเวลา <strong>{deleteTarget.type === "check_in" ? "เข้างาน" : "เลิกงาน"}</strong> ของ{" "}
+                <strong>{deleteTarget.employeeName}</strong>{" "}
+                เมื่อ {fmtDateTime(deleteTarget.checked_at)}?
               </p>
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">เหตุผล *</label>
@@ -646,7 +610,7 @@ export default function AttendanceManagePage() {
               {formErr && <div className="bg-red-50 text-red-700 text-sm rounded-lg p-2">{formErr}</div>}
             </div>
             <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-gray-50">
-              <button onClick={() => setShowDelete(null)} className="px-4 py-2 text-sm rounded-lg border border-border">ยกเลิก</button>
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm rounded-lg border border-border">ยกเลิก</button>
               <button onClick={submitDelete} disabled={busy || !form.reason} className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-2">
                 {busy && <Loader2 className="w-4 h-4 animate-spin" />} ลบ
               </button>

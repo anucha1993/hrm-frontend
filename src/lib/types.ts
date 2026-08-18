@@ -88,6 +88,7 @@ export type Employee = {
   address?: string | null;
   national_id: string;
   labour_id?: number | null;
+  hip_enroll_number?: string | null;
   marital_status?: string | null;
   religion?: string | null;
   education_level?: string | null;
@@ -366,6 +367,43 @@ export type AttendanceAuditLog = {
   new_values: Record<string, unknown> | null;
   reason: string | null;
   user?: { id: number; name: string } | null;
+  created_at: string;
+};
+
+export type AttendanceRosterEntry = {
+  id: number;
+  checked_at: string;
+  status: Attendance["status"];
+  late_minutes: number | null;
+  source: "device" | "manual";
+};
+
+export type AttendanceRosterRow = {
+  employee: {
+    id: number;
+    employee_code: string;
+    first_name: string;
+    last_name: string;
+    department?: { id: number; name: string } | null;
+  };
+  date: string;
+  day_status: "normal" | "late" | "early_leave" | "overtime" | "leave" | "holiday" | "day_off" | "absent" | "upcoming";
+  check_in: AttendanceRosterEntry | null;
+  check_out: AttendanceRosterEntry | null;
+  leave: { id: number; type: string; is_half_day: boolean } | null;
+  shift: { id: number; name: string; start_time: string; end_time: string } | null;
+};
+
+export type HipTimeSyncLog = {
+  id: number;
+  received: number;
+  created: number;
+  skipped: number;
+  unmapped_enroll_numbers: string[] | null;
+  unmapped_ids: (number | string)[] | null;
+  errors: { source_ref: string; error: string }[] | null;
+  message: string | null;
+  ip: string | null;
   created_at: string;
 };
 

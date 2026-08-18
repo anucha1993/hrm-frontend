@@ -521,10 +521,10 @@ function PrintDailyOrderModal({ wo, entry, onClose }: { wo: WorkOrderDetail; ent
             </tbody>
           </table>
 
-          {/* รายการจ่ายเพิ่มเติม */}
+          {/* รายการจ่าย-หักเพิ่มเติม */}
           {wo.extra_items && wo.extra_items.length > 0 && (
             <>
-              <div className="font-semibold mb-1">รายการจ่ายเพิ่มเติม</div>
+              <div className="font-semibold mb-1">รายการจ่าย-หักเพิ่มเติม</div>
               <table className="w-full border border-gray-700 mb-4">
                 <thead className="bg-gray-100">
                   <tr>
@@ -544,7 +544,7 @@ function PrintDailyOrderModal({ wo, entry, onClose }: { wo: WorkOrderDetail; ent
                       <td className="border border-gray-700 px-2 py-1 text-center">{ex.unit ?? "-"}</td>
                       <td className="border border-gray-700 px-2 py-1 text-right">{Number(ex.qty)}</td>
                       <td className="border border-gray-700 px-2 py-1 text-right">{fmtMoney(ex.rate)}</td>
-                      <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{fmtMoney(ex.amount)}</td>
+                      <td className={`border border-gray-700 px-2 py-1 text-right font-semibold ${Number(ex.amount) < 0 ? "text-red-600" : ""}`}>{fmtMoney(ex.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
