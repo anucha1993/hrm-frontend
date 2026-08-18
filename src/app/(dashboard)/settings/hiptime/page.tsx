@@ -5,7 +5,7 @@ import Topbar from "@/components/Topbar";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { HipTimeSyncLog } from "@/lib/types";
-import { Fingerprint, Loader2, Save, Check, History, RefreshCw, AlertTriangle } from "lucide-react";
+import { Fingerprint, Loader2, Save, Check, History, RefreshCw, AlertTriangle, Camera, Copy } from "lucide-react";
 
 type SettingRow = { key: string; value: unknown; category?: string; label?: string };
 
@@ -27,6 +27,19 @@ export default function HipTimeSettingsPage() {
   const [logs, setLogs] = useState<HipTimeSyncLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
   const [logsError, setLogsError] = useState<string | null>(null);
+
+  const [selfieUrl, setSelfieUrl] = useState("");
+  const [urlCopied, setUrlCopied] = useState(false);
+
+  useEffect(() => {
+    setSelfieUrl(`${window.location.origin}/attendance`);
+  }, []);
+
+  async function copySelfieUrl() {
+    await navigator.clipboard.writeText(selfieUrl);
+    setUrlCopied(true);
+    setTimeout(() => setUrlCopied(false), 2000);
+  }
 
   useEffect(() => {
     apiFetch<{ data: SettingRow[] }>("/payroll-settings")
@@ -89,6 +102,36 @@ export default function HipTimeSettingsPage() {
             <p className="text-sm text-muted">
               เครื่องสแกนอาจถูกใช้เปิดประตูด้วย ระบบจึงแยกเข้างาน/ออกงานจากเวลาที่สแกนแทน — สแกนในช่วงนี้นับเป็น &quot;เข้างาน&quot; (เอาเวลาที่เช้าที่สุด) นอกช่วงนี้นับเป็น &quot;ออกจากงาน&quot; (เอาเวลาล่าสุด)
             </p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-border p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-primary-50 text-primary-600 border border-primary-100 p-2">
+              <Camera className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">ลิงก์เซลฟี่เข้า-ออกงาน (แทนเครื่อง HIP Time)</h3>
+              <p className="text-sm text-muted">
+                ส่งลิงก์นี้ให้พนักงานเปิดผ่านมือถือเพื่อถ่ายเซลฟี่ลงเวลาเข้า-ออกงานเอง โดยไม่ต้องสแกนที่เครื่อง HIP Time
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 max-w-xl">
+            <input
+              type="text"
+              readOnly
+              value={selfieUrl}
+              onClick={(e) => e.currentTarget.select()}
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-surface text-muted font-mono"
+            />
+            <button
+              onClick={copySelfieUrl}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 shrink-0"
+            >
+              {urlCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {urlCopied ? "คัดลอกแล้ว" : "คัดลอกลิงก์"}
+            </button>
           </div>
         </div>
 

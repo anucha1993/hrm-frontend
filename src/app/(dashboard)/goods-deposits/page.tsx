@@ -3,7 +3,7 @@
 import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
 import Link from "next/link";
-import { Plus, Search, Edit2, Trash2, Loader2, Receipt, XCircle } from "lucide-react";
+import { Plus, Search, Edit2, Eye, Trash2, Loader2, Receipt, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -216,12 +216,21 @@ export default function GoodsDepositsPage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1">
-                              {canUpdate && d.status === "pending" && (
+                              {d.status === "pending" ? (
+                                canUpdate && (
+                                  <Link
+                                    href={`/goods-deposits/${d.id}/edit`}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-primary-50 text-primary-600 text-xs font-medium"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" /> แก้ไข
+                                  </Link>
+                                )
+                              ) : (
                                 <Link
                                   href={`/goods-deposits/${d.id}/edit`}
-                                  className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-primary-50 text-primary-600 text-xs font-medium"
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-surface text-muted text-xs font-medium"
                                 >
-                                  <Edit2 className="w-3.5 h-3.5" /> แก้ไข
+                                  <Eye className="w-3.5 h-3.5" /> ดู
                                 </Link>
                               )}
                               {canUpdate && d.status === "pending" && (

@@ -65,6 +65,8 @@ const SOURCE_LABELS: Record<string, string> = {
 
 type DepositRow = { item_name: string; qty: string; unit_price: string; note: string };
 
+type OutOfPeriodDeposit = { id: number; slip_no: string; deposit_date: string; total_amount: string };
+
 function emptyDepositRow(): DepositRow {
   return { item_name: "", qty: "1", unit_price: "0", note: "" };
 }
@@ -87,6 +89,8 @@ export default function SlipDetailPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [depositPreview, setDepositPreview] = useState<{ count: number; total: number } | null>(null);
+  const [outOfPeriodDeposits, setOutOfPeriodDeposits] = useState<OutOfPeriodDeposit[]>([]);
+  const [selectedManualIds, setSelectedManualIds] = useState<number[]>([]);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [deductionBusy, setDeductionBusy] = useState(false);
 
@@ -169,20 +173,35 @@ export default function SlipDetailPage() {
 
   async function loadDepositPreview() {
     try {
-      const res = await apiFetch<{ data: { id: number }[]; total: number }>(
-        `/goods-deposits/preview-for-payslip/${id}`
-      );
+      const res = await apiFetch<{
+        data: { id: number }[];
+        total: number;
+        out_of_period: OutOfPeriodDeposit[];
+        out_of_period_total: number;
+      }>(`/goods-deposits/preview-for-payslip/${id}`);
       setDepositPreview({ count: res.data.length, total: res.total });
+      const outOfPeriod = res.out_of_period ?? [];
+      setOutOfPeriodDeposits(outOfPeriod);
+      setSelectedManualIds((ids) => ids.filter((i) => outOfPeriod.some((d) => d.id === i)));
     } catch {
       setDepositPreview(null);
+      setOutOfPeriodDeposits([]);
     }
   }
 
-  async function applyDeposits() {
+  function toggleManualDeposit(depositId: number) {
+    setSelectedManualIds((ids) => (ids.includes(depositId) ? ids.filter((i) => i !== depositId) : [...ids, depositId]));
+  }
+
+  async function applyDeposits(depositIds?: number[]) {
     setBusy(true);
     setErr(null);
     try {
-      await apiFetch(`/goods-deposits/apply-to-payslip/${id}`, { method: "POST" });
+      await apiFetch(`/goods-deposits/apply-to-payslip/${id}`, {
+        method: "POST",
+        body: depositIds && depositIds.length > 0 ? { deposit_ids: depositIds } : undefined,
+      });
+      setSelectedManualIds([]);
       await load();
       await loadDepositPreview();
     } catch (e) {
@@ -426,25 +445,14 @@ export default function SlipDetailPage() {
           items={deductions}
           onRemove={status === "draft" || status === "computed" ? removeDeduction : undefined}
           removeBusy={deductionBusy}
-        />
-
-        <ItemSection title="ประกันสังคม" items={ssfItems} />
-        <ItemSection title="ภาษี" items={taxItems} />
-
-        {/* Goods Deposits panel — ระบบตัดให้อัตโนมัติตอนกดคำนวณแล้ว, ที่นี่ไว้เพิ่ม/จัดการรายการหัก */}
-        {(status === "draft" || status === "computed") && canCompute && (
-          <div className="bg-white rounded-xl border border-border p-5">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-amber-600" />
-                <h3 className="font-semibold">ใบมัดจำของใช้ทั่วไปในงวดนี้</h3>
-              </div>
-              <div className="flex items-center gap-2">
+          headerActions={
+            (status === "draft" || status === "computed") && canCompute ? (
+              <div className="flex items-center gap-2 flex-wrap">
                 <ActionBtn onClick={openDepositModal} busy={busy}>
                   <Plus className="w-4 h-4" /> เพิ่มรายการหัก
                 </ActionBtn>
                 {depositPreview && depositPreview.count > 0 && (
-                  <ActionBtn onClick={applyDeposits} busy={busy} variant="success">
+                  <ActionBtn onClick={() => applyDeposits()} busy={busy} variant="success">
                     <Check className="w-4 h-4" /> ตัดยอด {depositPreview.count} ใบ (
                     {fmtMoney(depositPreview.total)})
                   </ActionBtn>
@@ -455,42 +463,62 @@ export default function SlipDetailPage() {
                   </ActionBtn>
                 )}
               </div>
-            </div>
-            <p className="text-xs text-muted mt-2">
-              {depositPreview === null
-                ? "กำลังตรวจสอบ..."
-                : depositPreview.count === 0 && !deductions.some((d) => d.code === "GOODS_DEPOSIT")
-                  ? "ไม่มีใบมัดจำที่รอตัดยอดในงวดนี้ (ระบบตัดให้อัตโนมัติตอนกดคำนวณ)"
-                  : depositPreview.count === 0
-                    ? "ตัดยอดไปแล้ว — หากผิดลบรายการนั้นออกได้จากรายการด้านล่าง หรือกดยกเลิกการตัดยอดทั้งหมด"
-                    : `พบใบมัดจำเพิ่มเติมอีก ${depositPreview.count} ใบที่ยังไม่ได้ตัดยอด รวม ${fmtMoney(depositPreview.total)} บาท`}
-            </p>
+            ) : undefined
+          }
+          subtitle={
+            (status === "draft" || status === "computed") && canCompute ? (
+              <span className="flex items-center gap-1.5">
+                <Receipt className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                {depositPreview === null
+                  ? "กำลังตรวจสอบใบมัดจำของใช้ทั่วไปในงวดนี้..."
+                  : depositPreview.count === 0 && !deductions.some((d) => d.code === "GOODS_DEPOSIT")
+                    ? "ไม่มีใบมัดจำของใช้ทั่วไปที่รอตัดยอดในงวดนี้ (ระบบตัดให้อัตโนมัติตอนกดคำนวณ)"
+                    : depositPreview.count === 0
+                      ? "ใบมัดจำของใช้ทั่วไปในงวดนี้ตัดยอดไปแล้ว — หากผิดลบรายการนั้นออกได้ หรือกดยกเลิกการตัดยอดทั้งหมด"
+                      : `พบใบมัดจำของใช้ทั่วไปเพิ่มเติมอีก ${depositPreview.count} ใบที่ยังไม่ได้ตัดยอด รวม ${fmtMoney(depositPreview.total)} บาท`}
+              </span>
+            ) : undefined
+          }
+        />
 
-            {deductions.some((d) => d.code === "GOODS_DEPOSIT") && (
-              <div className="mt-3 divide-y divide-border border-t border-border">
-                {deductions
-                  .filter((d) => d.code === "GOODS_DEPOSIT")
-                  .map((d) => (
-                    <div key={d.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                      <span>{d.name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-red-700">-{fmtMoney(d.amount)}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeDeduction(d.id)}
-                          disabled={deductionBusy}
-                          title="ลบรายการนี้"
-                          className="p-1 rounded text-accent-500 hover:bg-accent-50 disabled:opacity-50"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+        {/* ใบมัดจำที่รอตัด แต่วันที่หยิบของอยู่นอกช่วงงวดนี้ — ต้องเลือกและกดตัดยอดเองแบบ manual เท่านั้น */}
+        {(status === "draft" || status === "computed") && canCompute && outOfPeriodDeposits.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+                <AlertCircle className="w-4 h-4" /> พบใบมัดจำของใช้ทั่วไปนอกงวดนี้ที่ยังรอตัดยอด ({outOfPeriodDeposits.length} ใบ)
               </div>
-            )}
+              {selectedManualIds.length > 0 && (
+                <ActionBtn onClick={() => applyDeposits(selectedManualIds)} busy={busy} variant="success">
+                  <Check className="w-4 h-4" /> ตัดยอดที่เลือก {selectedManualIds.length} ใบ (Manual)
+                </ActionBtn>
+              )}
+            </div>
+            <p className="text-xs text-amber-700 mb-3">
+              วันที่หยิบของไม่อยู่ในช่วงงวดนี้ ระบบจึงไม่ตัดยอดให้อัตโนมัติ — ติ๊กเลือกใบที่ต้องการแล้วกดตัดยอดเองหากต้องการนำมารวมในงวดนี้
+            </p>
+            <div className="divide-y divide-amber-200/70 border-t border-amber-200">
+              {outOfPeriodDeposits.map((d) => (
+                <label key={d.id} className="flex items-center justify-between gap-3 py-2 text-sm cursor-pointer">
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedManualIds.includes(d.id)}
+                      onChange={() => toggleManualDeposit(d.id)}
+                    />
+                    <span>
+                      {d.slip_no} <span className="text-xs text-muted">({fmtDate(d.deposit_date)})</span>
+                    </span>
+                  </span>
+                  <span className="text-red-700 font-medium">-{fmtMoney(d.total_amount)}</span>
+                </label>
+              ))}
+            </div>
           </div>
         )}
+
+        <ItemSection title="ประกันสังคม" items={ssfItems} />
+        <ItemSection title="ภาษี" items={taxItems} />
 
         {/* OT Sessions */}
         {(slip.ot_sessions ?? []).length > 0 && (
@@ -701,6 +729,8 @@ function ItemSection({
   canViewWorkOrders = false,
   onRemove,
   removeBusy = false,
+  headerActions,
+  subtitle,
 }: {
   title: string;
   items: PayrollSlipItem[];
@@ -709,12 +739,21 @@ function ItemSection({
   canViewWorkOrders?: boolean;
   onRemove?: (itemId: number) => void;
   removeBusy?: boolean;
+  headerActions?: React.ReactNode;
+  subtitle?: React.ReactNode;
 }) {
-  if (items.length === 0) return null;
+  if (items.length === 0 && !headerActions) return null;
   const total = items.reduce((a, i) => a + parseFloat(i.amount), 0);
   return (
     <div className="bg-white rounded-xl border border-border p-5">
-      <h3 className="font-semibold mb-3">{title}</h3>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+        <h3 className="font-semibold">{title}</h3>
+        {headerActions}
+      </div>
+      {subtitle && <p className="text-xs text-muted mb-3">{subtitle}</p>}
+      {items.length === 0 ? (
+        <p className="text-sm text-muted">ไม่มีรายการ</p>
+      ) : (
       <table className="w-full text-sm">
         <thead className="text-left text-xs text-muted uppercase border-b border-border">
           <tr>
@@ -790,6 +829,7 @@ function ItemSection({
           </tr>
         </tbody>
       </table>
+      )}
     </div>
   );
 }

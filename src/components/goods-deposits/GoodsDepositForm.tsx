@@ -5,9 +5,17 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus, Trash2, Loader2, Save } from "lucide-react";
 import Topbar from "@/components/Topbar";
+import Badge from "@/components/Badge";
 import EmployeeCombobox from "@/components/EmployeeCombobox";
 import { ApiError, apiFetch } from "@/lib/api";
-import type { Employee, GoodsDepositSlip, Paginated } from "@/lib/types";
+import type { Employee, GoodsDepositSlip, GoodsDepositStatus, Paginated } from "@/lib/types";
+
+const STATUS_LABEL: Record<GoodsDepositStatus, { label: string; variant: "success" | "warning" | "danger" | "default" }> = {
+  pending:   { label: "รอตัดยอด",  variant: "warning" },
+  deducted:  { label: "ตัดยอดแล้ว", variant: "success" },
+  cancelled: { label: "ยกเลิก",     variant: "danger"  },
+  waived:    { label: "ยกหนี้",     variant: "default" },
+};
 
 type ItemRow = {
   item_name: string;
@@ -31,6 +39,8 @@ function thb(n: number) {
 export default function GoodsDepositForm({ initial }: Props) {
   const router = useRouter();
   const isEdit = !!initial;
+  // ถ้าตัดยอด/ยกเลิก/ยกเว้นไปแล้ว ให้เปิดดูได้อย่างเดียว แก้ไขไม่ได้
+  const readOnly = isEdit && initial?.status !== "pending";
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState<string>(
@@ -120,18 +130,29 @@ export default function GoodsDepositForm({ initial }: Props) {
     }
   }
 
+  const employee = employees.find((e) => String(e.id) === employeeId) ?? initial?.employee;
+
   return (
     <>
-      <Topbar title={isEdit ? `แก้ไขใบ ${initial?.slip_no}` : "เพิ่มใบมัดจำใหม่"} />
+      <Topbar title={isEdit ? `${readOnly ? "ดูใบ" : "แก้ไขใบ"} ${initial?.slip_no}` : "เพิ่มใบมัดจำใหม่"} />
       <div className="p-6 space-y-6 max-w-5xl">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
           <Link
             href="/goods-deposits"
             className="flex items-center gap-1 text-sm text-muted hover:text-foreground"
           >
             <ArrowLeft className="w-4 h-4" /> กลับ
           </Link>
+          {initial && (
+            <Badge label={STATUS_LABEL[initial.status].label} variant={STATUS_LABEL[initial.status].variant} />
+          )}
         </div>
+
+        {readOnly && (
+          <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">
+            ใบนี้อยู่ในสถานะ &quot;{STATUS_LABEL[initial!.status].label}&quot; แล้ว จึงดูได้อย่างเดียว แก้ไขไม่ได้
+          </div>
+        )}
 
         {error && (
           <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
@@ -141,15 +162,22 @@ export default function GoodsDepositForm({ initial }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-muted mb-1">พนักงาน *</label>
-              <EmployeeCombobox employees={employees} value={employeeId} onChange={setEmployeeId} />
+              {readOnly ? (
+                <div className="px-3 py-2.5 rounded-xl border border-border text-sm bg-surface">
+                  {employee ? `${employee.employee_code} - ${employee.first_name} ${employee.last_name}` : "-"}
+                </div>
+              ) : (
+                <EmployeeCombobox employees={employees} value={employeeId} onChange={setEmployeeId} />
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-muted mb-1">วันที่หยิบของ *</label>
               <input
                 type="date"
                 value={depositDate}
+                disabled={readOnly}
                 onChange={(e) => setDepositDate(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm bg-white"
+                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm bg-white disabled:bg-surface disabled:text-muted"
               />
             </div>
           </div>
@@ -157,9 +185,10 @@ export default function GoodsDepositForm({ initial }: Props) {
             <label className="block text-xs font-medium text-muted mb-1">หมายเหตุ</label>
             <textarea
               value={note}
+              disabled={readOnly}
               onChange={(e) => setNote(e.target.value)}
               rows={2}
-              className="w-full px-3 py-2.5 rounded-xl border border-border text-sm bg-white resize-none"
+              className="w-full px-3 py-2.5 rounded-xl border border-border text-sm bg-white resize-none disabled:bg-surface disabled:text-muted"
             />
           </div>
         </div>
@@ -167,12 +196,14 @@ export default function GoodsDepositForm({ initial }: Props) {
         <div className="bg-white border border-border rounded-xl overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-border">
             <h4 className="text-sm font-semibold text-foreground">รายการของที่หยิบ</h4>
-            <button
-              onClick={addRow}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100"
-            >
-              <Plus className="w-4 h-4" /> เพิ่มรายการ
-            </button>
+            {!readOnly && (
+              <button
+                onClick={addRow}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100"
+              >
+                <Plus className="w-4 h-4" /> เพิ่มรายการ
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -184,7 +215,7 @@ export default function GoodsDepositForm({ initial }: Props) {
                   <th className="px-3 py-2 text-right text-xs font-semibold text-muted w-32">ราคา/หน่วย</th>
                   <th className="px-3 py-2 text-right text-xs font-semibold text-muted w-32">รวม</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-muted">หมายเหตุ</th>
-                  <th className="px-3 py-2 w-12"></th>
+                  {!readOnly && <th className="px-3 py-2 w-12"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -197,9 +228,10 @@ export default function GoodsDepositForm({ initial }: Props) {
                         <input
                           type="text"
                           value={r.item_name}
+                          disabled={readOnly}
                           onChange={(e) => updateRow(idx, { item_name: e.target.value })}
                           placeholder="เช่น บุหรี่ / น้ำดื่ม"
-                          className="w-full px-2 py-1.5 rounded-lg border border-border text-sm"
+                          className="w-full px-2 py-1.5 rounded-lg border border-border text-sm disabled:bg-surface disabled:text-muted"
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -208,8 +240,9 @@ export default function GoodsDepositForm({ initial }: Props) {
                           min="0"
                           step="0.01"
                           value={r.qty}
+                          disabled={readOnly}
                           onChange={(e) => updateRow(idx, { qty: e.target.value })}
-                          className="w-full px-2 py-1.5 rounded-lg border border-border text-sm text-right"
+                          className="w-full px-2 py-1.5 rounded-lg border border-border text-sm text-right disabled:bg-surface disabled:text-muted"
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -218,8 +251,9 @@ export default function GoodsDepositForm({ initial }: Props) {
                           min="0"
                           step="0.01"
                           value={r.unit_price}
+                          disabled={readOnly}
                           onChange={(e) => updateRow(idx, { unit_price: e.target.value })}
-                          className="w-full px-2 py-1.5 rounded-lg border border-border text-sm text-right"
+                          className="w-full px-2 py-1.5 rounded-lg border border-border text-sm text-right disabled:bg-surface disabled:text-muted"
                         />
                       </td>
                       <td className="px-3 py-2 text-sm text-right font-medium">{thb(subtotal)}</td>
@@ -227,19 +261,22 @@ export default function GoodsDepositForm({ initial }: Props) {
                         <input
                           type="text"
                           value={r.note}
+                          disabled={readOnly}
                           onChange={(e) => updateRow(idx, { note: e.target.value })}
-                          className="w-full px-2 py-1.5 rounded-lg border border-border text-sm"
+                          className="w-full px-2 py-1.5 rounded-lg border border-border text-sm disabled:bg-surface disabled:text-muted"
                         />
                       </td>
-                      <td className="px-3 py-2 text-center">
-                        <button
-                          onClick={() => removeRow(idx)}
-                          disabled={rows.length === 1}
-                          className="p-1 rounded-lg hover:bg-accent-50 text-accent-600 disabled:opacity-30"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
+                      {!readOnly && (
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            onClick={() => removeRow(idx)}
+                            disabled={rows.length === 1}
+                            className="p-1 rounded-lg hover:bg-accent-50 text-accent-600 disabled:opacity-30"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -262,8 +299,9 @@ export default function GoodsDepositForm({ initial }: Props) {
             href="/goods-deposits"
             className="px-4 py-2.5 rounded-xl border border-border text-sm font-medium text-muted hover:bg-surface"
           >
-            ยกเลิก
+            {readOnly ? "กลับ" : "ยกเลิก"}
           </Link>
+          {!readOnly && (
           <button
             onClick={submit}
             disabled={saving}
@@ -272,6 +310,7 @@ export default function GoodsDepositForm({ initial }: Props) {
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {isEdit ? "บันทึกการแก้ไข" : "บันทึก"}
           </button>
+          )}
         </div>
       </div>
     </>

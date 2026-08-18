@@ -114,7 +114,6 @@ const menuItems: MenuItem[] = [
       { label: "งวดจ่ายเงิน", href: "/payroll", permission: "payroll.view" },
       { label: "จัดการ OT", href: "/payroll/ot-sessions", permission: "payroll.ot_manage" },
       { label: "โปรไฟล์ค่าจ้าง", href: "/payroll/profiles", permission: "payroll.config" },
-      { label: "ตั้งค่าภาษี", href: "/payroll/tax", permission: "payroll.config" },
       { label: "เบี้ย/หักรายการ", href: "/payroll/components", permission: "payroll.config" },
     ],
   },
@@ -169,6 +168,7 @@ const menuItems: MenuItem[] = [
       { label: "ประเภทการจ้าง", href: "/settings/employment-types", permission: "master_data.manage" },
       { label: "สถานที่ทำงาน", href: "/settings/locations", permission: "attendance.manage" },
       { label: "กะการทำงาน", href: "/settings/shifts", permission: "attendance.manage" },
+      { label: "HIP Time / เซลฟี่เข้างาน", href: "/settings/hiptime", permission: "attendance.manage" },
     ],
   },
 ];
