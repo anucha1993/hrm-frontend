@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { Employee } from "@/lib/types";
 
-function employeeLabel(e: Employee) {
-  return `${e.employee_code} - ${e.first_name} ${e.last_name}`;
+function employeeLabel(e: Employee, showPhone: boolean) {
+  const nickname = e.nickname ? ` (${e.nickname})` : "";
+  const phone = showPhone && e.phone ? ` · ${e.phone}` : "";
+  return `${e.employee_code} - ${e.first_name} ${e.last_name}${nickname}${phone}`;
 }
 
 export default function EmployeeCombobox({
@@ -15,6 +17,7 @@ export default function EmployeeCombobox({
   placeholder = "-- เลือกพนักงาน --",
   clearLabel = "-- เลือกพนักงาน --",
   className = "w-full pl-3 pr-8 py-2.5 rounded-xl border border-border text-sm bg-white",
+  showPhone = false,
 }: {
   employees: Employee[];
   value: string;
@@ -22,6 +25,7 @@ export default function EmployeeCombobox({
   placeholder?: string;
   clearLabel?: string;
   className?: string;
+  showPhone?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -63,7 +67,7 @@ export default function EmployeeCombobox({
       <div className="relative">
         <input
           type="text"
-          value={open ? query : selected ? employeeLabel(selected) : ""}
+          value={open ? query : selected ? employeeLabel(selected, showPhone) : ""}
           onChange={(e) => {
             setQuery(e.target.value);
             if (!open) setOpen(true);
@@ -98,7 +102,7 @@ export default function EmployeeCombobox({
                   String(e.id) === value ? "bg-primary-50 font-medium text-primary-700" : "text-foreground"
                 }`}
               >
-                {employeeLabel(e)}
+                {employeeLabel(e, showPhone)}
               </button>
             ))
           )}

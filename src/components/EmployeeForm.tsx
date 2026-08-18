@@ -2,19 +2,22 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Trash2, Upload, FileIcon, Database, X } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Upload, FileIcon, Database, X, Users, Plus } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
 import LabourImportModal from "@/components/LabourImportModal";
+import EmployeeCombobox from "@/components/EmployeeCombobox";
 import { useAuth } from "@/lib/auth-context";
 import type {
   Country,
   Department,
   Employee,
   EmployeeDocument,
+  EmployeeRelative,
   EmployeeStatus,
   EmploymentType,
   Labour,
+  Paginated,
   WorkProfile,
 } from "@/lib/types";
 
@@ -106,6 +109,12 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
   const [existingDocs, setExistingDocs] = useState<EmployeeDocument[]>([]);
   const [deleteIds, setDeleteIds] = useState<number[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  const [relatives, setRelatives] = useState<EmployeeRelative[]>([]);
+  const [newRelativeId, setNewRelativeId] = useState("");
+  const [newRelativeRelation, setNewRelativeRelation] = useState("");
+  const [relativeSaving, setRelativeSaving] = useState(false);
+  const [relativeError, setRelativeError] = useState<string | null>(null);
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,12 +134,14 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
       apiFetch<{ data: Country[] }>("/countries"),
       apiFetch<{ data: EmploymentType[] }>("/employment-types"),
       apiFetch<{ data: WorkProfile[] }>("/work-profiles?active_only=1"),
+      apiFetch<{ data: Paginated<Employee> }>("/employees?per_page=1000&status=active"),
     ])
-      .then(([d, c, t, wp]) => {
+      .then(([d, c, t, wp, emp]) => {
         setDepartments(d.data);
         setCountries(c.data);
         setTypes(t.data);
         setWorkProfiles(wp.data);
+        setAllEmployees(emp.data.data);
       })
       .catch(() => undefined);
   }, []);
@@ -175,6 +186,7 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
         note: e.note ?? "",
       });
       setExistingDocs(e.documents ?? []);
+      setRelatives(e.relatives ?? []);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -192,6 +204,36 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
 
   function toggleDeleteDoc(id: number) {
     setDeleteIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function addRelative() {
+    if (!employeeId || !newRelativeId || !newRelativeRelation.trim()) return;
+    setRelativeSaving(true);
+    setRelativeError(null);
+    try {
+      const res = await apiFetch<{ data: Employee }>(`/employees/${employeeId}/relatives`, {
+        method: "POST",
+        body: { relative_employee_id: Number(newRelativeId), relation: newRelativeRelation.trim() },
+      });
+      setRelatives(res.data.relatives ?? []);
+      setNewRelativeId("");
+      setNewRelativeRelation("");
+    } catch (err) {
+      setRelativeError(err instanceof ApiError ? err.message : "เพิ่มเครือญาติไม่สำเร็จ");
+    } finally {
+      setRelativeSaving(false);
+    }
+  }
+
+  async function removeRelative(relativeRowId: number) {
+    if (!employeeId) return;
+    setRelativeError(null);
+    try {
+      await apiFetch(`/employees/${employeeId}/relatives/${relativeRowId}`, { method: "DELETE" });
+      setRelatives((prev) => prev.filter((r) => r.id !== relativeRowId));
+    } catch (err) {
+      setRelativeError(err instanceof ApiError ? err.message : "ลบเครือญาติไม่สำเร็จ");
+    }
   }
 
   async function submit(e: FormEvent) {
@@ -527,6 +569,91 @@ export default function EmployeeForm({ employeeId }: EmployeeFormProps) {
               className={input}
             />
           </Field>
+        </Section>
+
+        <Section title="เครือญาติในระบบ">
+          <div className="md:col-span-2 space-y-3">
+            <p className="text-xs text-muted">
+              เพิ่มพนักงานคนอื่นในระบบที่เป็นเครือญาติกัน เผื่อกรณีฉุกเฉินจะได้ติดต่อได้ (เพิ่มได้ไม่จำกัดจำนวน)
+            </p>
+
+            {!isEdit ? (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">
+                กรุณาบันทึกข้อมูลพนักงานก่อน จึงจะเพิ่มเครือญาติได้
+              </div>
+            ) : (
+              <>
+                {relativeError && (
+                  <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                    {relativeError}
+                  </div>
+                )}
+
+                {relatives.length > 0 && (
+                  <div className="space-y-2">
+                    {relatives.map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-white"
+                      >
+                        <Users className="w-4 h-4 text-muted shrink-0" />
+                        <div className="flex-1 text-sm">
+                          <span className="font-medium">
+                            {r.relative.first_name} {r.relative.last_name}
+                            {r.relative.nickname ? ` (${r.relative.nickname})` : ""}
+                          </span>
+                          <span className="text-muted"> ({r.relative.employee_code})</span>
+                          <span className="text-muted"> — {r.relation}</span>
+                          {r.relative.phone && (
+                            <span className="text-muted"> · โทร {r.relative.phone}</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeRelative(r.id)}
+                          className="p-1.5 rounded-lg text-accent-500 hover:bg-accent-50"
+                          title="ลบ"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-muted mb-1">พนักงาน</label>
+                    <EmployeeCombobox
+                      employees={allEmployees.filter(
+                        (emp) => emp.id !== employeeId && !relatives.some((r) => r.relative_employee_id === emp.id)
+                      )}
+                      value={newRelativeId}
+                      onChange={setNewRelativeId}
+                      showPhone
+                    />
+                  </div>
+                  <div className="w-full sm:w-48">
+                    <label className="block text-xs font-medium text-muted mb-1">ความสัมพันธ์</label>
+                    <input
+                      value={newRelativeRelation}
+                      onChange={(e) => setNewRelativeRelation(e.target.value)}
+                      placeholder="เช่น พี่น้อง, พ่อ-แม่"
+                      className={input}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!newRelativeId || !newRelativeRelation.trim() || relativeSaving}
+                    onClick={addRelative}
+                    className="inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold disabled:opacity-50 shrink-0"
+                  >
+                    <Plus className="w-4 h-4" /> เพิ่ม
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </Section>
 
         <Section title="เอกสารประกอบ">

@@ -72,6 +72,15 @@ export type EmployeeDocument = {
 
 export type EmployeeStatus = "active" | "resigned" | "terminated" | "suspended";
 
+export type EmployeeRelative = {
+  id: number;
+  employee_id: number;
+  relative_employee_id: number;
+  relation: string;
+  note?: string | null;
+  relative: Pick<Employee, "id" | "employee_code" | "first_name" | "last_name" | "nickname" | "phone" | "department_id">;
+};
+
 export type Employee = {
   id: number;
   employee_code: string;
@@ -115,6 +124,7 @@ export type Employee = {
   country?: Country | null;
   employment_type?: EmploymentType | null;
   documents?: EmployeeDocument[];
+  relatives?: EmployeeRelative[];
 };
 
 // ---- Labour API (proxy ผ่าน backend) ----
