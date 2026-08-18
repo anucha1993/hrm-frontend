@@ -40,6 +40,7 @@ import {
   RotateCcw,
   FileText,
   CalendarDays,
+  Plus,
 } from "lucide-react";
 
 type WorkOrderBrief = {
@@ -50,6 +51,23 @@ type WorkOrderBrief = {
   start_date: string;
   end_date: string;
 };
+
+// อธิบายว่าแต่ละรายการคำนวณมาจากส่วนไหนของระบบ (source ที่ backend ใส่ไว้ตอนสร้างรายการ)
+const SOURCE_LABELS: Record<string, string> = {
+  base: "เงินเดือนพื้นฐาน",
+  ot: "คำนวณค่าล่วงเวลา (OT)",
+  component: "ค่าตอบแทน/รายการประจำตัวพนักงาน",
+  rule: "กฎของโปรไฟล์ / Payroll Rules",
+  attendance: "ระบบเช็คเวลา (มาสาย/ขาดงาน)",
+  manual: "ระบบเพิ่ม/ปรับยอดอัตโนมัติ",
+  tax_calc: "คำนวณภาษี/ประกันสังคม",
+};
+
+type DepositRow = { item_name: string; qty: string; unit_price: string; note: string };
+
+function emptyDepositRow(): DepositRow {
+  return { item_name: "", qty: "1", unit_price: "0", note: "" };
+}
 
 interface FullSlip extends Omit<PayrollSlip, "period"> {
   items?: PayrollSlipItem[];
@@ -70,6 +88,84 @@ export default function SlipDetailPage() {
   const [err, setErr] = useState<string | null>(null);
   const [depositPreview, setDepositPreview] = useState<{ count: number; total: number } | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [deductionBusy, setDeductionBusy] = useState(false);
+
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const [depositDate, setDepositDate] = useState("");
+  const [depositNote, setDepositNote] = useState("");
+  const [depositRows, setDepositRows] = useState<DepositRow[]>([emptyDepositRow()]);
+  const [depositSaving, setDepositSaving] = useState(false);
+  const [depositErr, setDepositErr] = useState<string | null>(null);
+
+  function openDepositModal() {
+    const today = new Date().toISOString().slice(0, 10);
+    const start = slip?.period?.start_date?.slice(0, 10);
+    const end = slip?.period?.end_date?.slice(0, 10);
+    const withinPeriod = start && end && today >= start && today <= end;
+    setDepositDate(withinPeriod ? today : start ?? today);
+    setDepositNote("");
+    setDepositRows([emptyDepositRow()]);
+    setDepositErr(null);
+    setDepositModalOpen(true);
+  }
+
+  function updateDepositRow(idx: number, patch: Partial<DepositRow>) {
+    setDepositRows((rs) => rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+
+  function addDepositRow() {
+    setDepositRows((rs) => [...rs, emptyDepositRow()]);
+  }
+
+  function removeDepositRow(idx: number) {
+    setDepositRows((rs) => (rs.length > 1 ? rs.filter((_, i) => i !== idx) : rs));
+  }
+
+  async function submitDepositModal() {
+    setDepositErr(null);
+    if (depositRows.some((r) => !r.item_name.trim())) {
+      setDepositErr("กรุณากรอกชื่อรายการทุกแถว");
+      return;
+    }
+    setDepositSaving(true);
+    try {
+      await apiFetch("/goods-deposits", {
+        method: "POST",
+        body: {
+          employee_id: slip!.employee_id,
+          deposit_date: depositDate,
+          note: depositNote || null,
+          items: depositRows.map((r) => ({
+            item_name: r.item_name.trim(),
+            qty: Number(r.qty || 0),
+            unit_price: Number(r.unit_price || 0),
+            note: r.note || null,
+          })),
+        },
+      });
+      await applyDeposits();
+      setDepositModalOpen(false);
+    } catch (e) {
+      setDepositErr(e instanceof ApiError ? e.message : "เพิ่มรายการหักไม่สำเร็จ");
+    } finally {
+      setDepositSaving(false);
+    }
+  }
+
+  async function removeDeduction(itemId: number) {
+    if (!confirm("ลบรายการหักนี้ออกจากสลิป?")) return;
+    setDeductionBusy(true);
+    setErr(null);
+    try {
+      await apiFetch(`/payroll/slips/${id}/deductions/${itemId}`, { method: "DELETE" });
+      await load();
+      await loadDepositPreview();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "ลบรายการหักไม่สำเร็จ");
+    } finally {
+      setDeductionBusy(false);
+    }
+  }
 
   async function loadDepositPreview() {
     try {
@@ -325,11 +421,17 @@ export default function SlipDetailPage() {
           workOrders={slip.work_orders}
           canViewWorkOrders={hasPermission("payroll.view")}
         />
-        <ItemSection title="รายการหัก (Deductions)" items={deductions} />
+        <ItemSection
+          title="รายการหัก (Deductions)"
+          items={deductions}
+          onRemove={status === "draft" || status === "computed" ? removeDeduction : undefined}
+          removeBusy={deductionBusy}
+        />
+
         <ItemSection title="ประกันสังคม" items={ssfItems} />
         <ItemSection title="ภาษี" items={taxItems} />
 
-        {/* Goods Deposits panel */}
+        {/* Goods Deposits panel — ระบบตัดให้อัตโนมัติตอนกดคำนวณแล้ว, ที่นี่ไว้เพิ่ม/จัดการรายการหัก */}
         {(status === "draft" || status === "computed") && canCompute && (
           <div className="bg-white rounded-xl border border-border p-5">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -338,6 +440,9 @@ export default function SlipDetailPage() {
                 <h3 className="font-semibold">ใบมัดจำของใช้ทั่วไปในงวดนี้</h3>
               </div>
               <div className="flex items-center gap-2">
+                <ActionBtn onClick={openDepositModal} busy={busy}>
+                  <Plus className="w-4 h-4" /> เพิ่มรายการหัก
+                </ActionBtn>
                 {depositPreview && depositPreview.count > 0 && (
                   <ActionBtn onClick={applyDeposits} busy={busy} variant="success">
                     <Check className="w-4 h-4" /> ตัดยอด {depositPreview.count} ใบ (
@@ -346,7 +451,7 @@ export default function SlipDetailPage() {
                 )}
                 {deductions.some((d) => d.code === "GOODS_DEPOSIT") && (
                   <ActionBtn onClick={revokeDeposits} busy={busy} variant="danger">
-                    <RotateCcw className="w-4 h-4" /> ยกเลิกการตัดยอด
+                    <RotateCcw className="w-4 h-4" /> ยกเลิกการตัดยอดทั้งหมด
                   </ActionBtn>
                 )}
               </div>
@@ -355,11 +460,35 @@ export default function SlipDetailPage() {
               {depositPreview === null
                 ? "กำลังตรวจสอบ..."
                 : depositPreview.count === 0 && !deductions.some((d) => d.code === "GOODS_DEPOSIT")
-                  ? "ไม่มีใบมัดจำที่รอตัดยอดในงวดนี้"
+                  ? "ไม่มีใบมัดจำที่รอตัดยอดในงวดนี้ (ระบบตัดให้อัตโนมัติตอนกดคำนวณ)"
                   : depositPreview.count === 0
-                    ? "ตัดยอดไปแล้ว หากต้องการยกเลิกกดปุ่มยกเลิกอยู่ขวา"
-                    : `พบ${depositPreview.count} ใบรอตัดยอด รวม ${fmtMoney(depositPreview.total)} บาท`}
+                    ? "ตัดยอดไปแล้ว — หากผิดลบรายการนั้นออกได้จากรายการด้านล่าง หรือกดยกเลิกการตัดยอดทั้งหมด"
+                    : `พบใบมัดจำเพิ่มเติมอีก ${depositPreview.count} ใบที่ยังไม่ได้ตัดยอด รวม ${fmtMoney(depositPreview.total)} บาท`}
             </p>
+
+            {deductions.some((d) => d.code === "GOODS_DEPOSIT") && (
+              <div className="mt-3 divide-y divide-border border-t border-border">
+                {deductions
+                  .filter((d) => d.code === "GOODS_DEPOSIT")
+                  .map((d) => (
+                    <div key={d.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span>{d.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-red-700">-{fmtMoney(d.amount)}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeDeduction(d.id)}
+                          disabled={deductionBusy}
+                          title="ลบรายการนี้"
+                          className="p-1 rounded text-accent-500 hover:bg-accent-50 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -425,6 +554,141 @@ export default function SlipDetailPage() {
         onClose={() => setCalendarOpen(false)}
         onChanged={load}
       />
+
+      {depositModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="font-semibold">เพิ่มรายการหัก — ใบมัดจำของใช้ทั่วไป</h3>
+              <button onClick={() => setDepositModalOpen(false)} className="p-1 rounded hover:bg-surface">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {depositErr && (
+                <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                  {depositErr}
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">พนักงาน</label>
+                  <div className="px-3 py-2.5 rounded-xl border border-border text-sm bg-surface">
+                    {slip.employee?.first_name} {slip.employee?.last_name}{" "}
+                    <span className="text-xs text-muted font-mono">({slip.employee?.employee_code})</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">วันที่หยิบของ *</label>
+                  <input
+                    type="date"
+                    value={depositDate}
+                    min={slip.period?.start_date?.slice(0, 10)}
+                    max={slip.period?.end_date?.slice(0, 10)}
+                    onChange={(e) => setDepositDate(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-border text-sm bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="border border-border rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between p-3 border-b border-border">
+                  <h4 className="text-sm font-semibold">รายการของที่หยิบ</h4>
+                  <button
+                    type="button"
+                    onClick={addDepositRow}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary-50 text-primary-700 text-xs font-medium hover:bg-primary-100"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> เพิ่มรายการ
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-surface border-b border-border">
+                        <th className="px-2 py-2 text-left text-xs font-semibold text-muted">ชื่อรายการ *</th>
+                        <th className="px-2 py-2 text-right text-xs font-semibold text-muted w-20">จำนวน</th>
+                        <th className="px-2 py-2 text-right text-xs font-semibold text-muted w-28">ราคา/หน่วย</th>
+                        <th className="px-2 py-2 text-right text-xs font-semibold text-muted w-24">รวม</th>
+                        <th className="px-2 py-2 w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {depositRows.map((r, idx) => {
+                        const subtotal = Number(r.qty || 0) * Number(r.unit_price || 0);
+                        return (
+                          <tr key={idx}>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="text"
+                                value={r.item_name}
+                                onChange={(e) => updateDepositRow(idx, { item_name: e.target.value })}
+                                placeholder="เช่น บุหรี่ / น้ำดื่ม"
+                                className="w-full px-2 py-1.5 rounded-lg border border-border text-sm"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={r.qty}
+                                onChange={(e) => updateDepositRow(idx, { qty: e.target.value })}
+                                className="w-full px-2 py-1.5 rounded-lg border border-border text-sm text-right"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={r.unit_price}
+                                onChange={(e) => updateDepositRow(idx, { unit_price: e.target.value })}
+                                className="w-full px-2 py-1.5 rounded-lg border border-border text-sm text-right"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5 text-sm text-right font-medium">{fmtMoney(subtotal)}</td>
+                            <td className="px-2 py-1.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => removeDepositRow(idx)}
+                                className="p-1 rounded text-accent-500 hover:bg-accent-50"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-muted mb-1">หมายเหตุ</label>
+                <textarea
+                  value={depositNote}
+                  onChange={(e) => setDepositNote(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2.5 rounded-xl border border-border text-sm bg-white resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-border">
+              <button
+                onClick={() => setDepositModalOpen(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:bg-surface"
+              >
+                ยกเลิก
+              </button>
+              <ActionBtn onClick={submitDepositModal} busy={depositSaving}>
+                <Check className="w-4 h-4" /> บันทึกและตัดยอด
+              </ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -435,12 +699,16 @@ function ItemSection({
   positive = false,
   workOrders,
   canViewWorkOrders = false,
+  onRemove,
+  removeBusy = false,
 }: {
   title: string;
   items: PayrollSlipItem[];
   positive?: boolean;
   workOrders?: WorkOrderBrief[];
   canViewWorkOrders?: boolean;
+  onRemove?: (itemId: number) => void;
+  removeBusy?: boolean;
 }) {
   if (items.length === 0) return null;
   const total = items.reduce((a, i) => a + parseFloat(i.amount), 0);
@@ -452,13 +720,22 @@ function ItemSection({
           <tr>
             <th className="py-2">รายการ</th>
             <th className="py-2 text-right">จำนวน</th>
+            {onRemove && <th className="py-2 w-10"></th>}
           </tr>
         </thead>
         <tbody>
-          {items.map((i) => (
+          {items.map((i) => {
+            const amt = parseFloat(i.amount);
+            const rowPositive = positive ? amt >= 0 : amt < 0;
+            return (
             <tr key={i.id} className="border-b border-border last:border-0">
               <td className="py-2">
                 <div>{i.name}</div>
+                <div className="text-[11px] text-muted mt-0.5">
+                  {i.code && <span className="font-mono">รหัส: {i.code}</span>}
+                  {i.code && <span> · </span>}
+                  <span>ที่มา: {SOURCE_LABELS[i.source] ?? i.source}</span>
+                </div>
                 {i.formula && <div className="text-xs text-muted">{i.formula}</div>}
                 {i.code === "PRODUCTION_WAGE" && workOrders && workOrders.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -483,16 +760,33 @@ function ItemSection({
                   </div>
                 )}
               </td>
-              <td className={`py-2 text-right ${positive ? "text-green-700" : "text-red-700"}`}>
-                {positive ? "+" : "-"}{fmtMoney(i.amount)}
+              <td className={`py-2 text-right ${rowPositive ? "text-green-700" : "text-red-700"}`}>
+                {rowPositive ? "+" : "-"}{fmtMoney(Math.abs(amt))}
               </td>
+              {onRemove && (
+                <td className="py-2 text-right">
+                  {i.source === "manual" && i.code !== "CAP-ADJ" && (
+                    <button
+                      type="button"
+                      onClick={() => onRemove(i.id)}
+                      disabled={removeBusy}
+                      title="ลบรายการนี้"
+                      className="p-1 rounded text-accent-500 hover:bg-accent-50 disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </td>
+              )}
             </tr>
-          ))}
+            );
+          })}
           <tr className="font-semibold">
             <td className="py-2">รวม</td>
-            <td className={`py-2 text-right ${positive ? "text-green-700" : "text-red-700"}`}>
-              {positive ? "+" : "-"}{fmtMoney(total)}
+            <td className={`py-2 text-right ${(positive ? total >= 0 : total < 0) ? "text-green-700" : "text-red-700"}`}>
+              {(positive ? total >= 0 : total < 0) ? "+" : "-"}{fmtMoney(Math.abs(total))}
             </td>
+            {onRemove && <td className="py-2"></td>}
           </tr>
         </tbody>
       </table>

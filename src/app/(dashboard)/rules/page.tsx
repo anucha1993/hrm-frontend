@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import Topbar from "@/components/Topbar";
@@ -65,8 +65,8 @@ type Setting = {
 };
 
 const GLOBAL_SETTING_KEYS = [
-  { key: "max_deduction_percent", label: "หักรวมไม่เกิน % ของเงินเดือน", type: "number" as const, suffix: "%" },
-  { key: "min_net_salary",        label: "เงินสุทธิหลังหักขั้นต่ำ",       type: "number" as const, suffix: "บาท" },
+  { key: "max_deduction_percent", label: "หักรวมไม่เกิน % ของเงินเดือน", type: "number" as const, suffix: "%", capToggle: true },
+  { key: "min_net_salary",        label: "เงินสุทธิหลังหักขั้นต่ำ",       type: "number" as const, suffix: "บาท", capToggle: true },
   { key: "daily_rate_divisor",    label: "ตัวหารสำหรับเรทรายวัน (เงินเดือน/?)", type: "number" as const, suffix: "" },
   { key: "calc_order",            label: "ลำดับการคำนวณ",                  type: "select" as const,
     options: [
@@ -436,15 +436,52 @@ function GlobalSettingsCard({
   canManage: boolean;
   onSave: () => void;
 }) {
+  // จำค่าล่าสุดที่ > 0 ของแต่ละ cap ไว้ เผื่อกดเปิดใช้งานใหม่หลังจากปิดไป
+  const lastNonZero = useRef<Record<string, number>>({});
+  const [forceOn, setForceOn] = useState<Record<string, boolean>>({});
+  GLOBAL_SETTING_KEYS.forEach((cfg) => {
+    const v = Number(settings[cfg.key] ?? 0);
+    if (v > 0) lastNonZero.current[cfg.key] = v;
+  });
+
+  function toggleCap(key: string, checked: boolean) {
+    if (!checked) {
+      setForceOn((f) => ({ ...f, [key]: false }));
+      setSettings({ ...settings, [key]: 0 });
+      return;
+    }
+    const restore = lastNonZero.current[key];
+    if (restore) {
+      setSettings({ ...settings, [key]: restore });
+    } else {
+      setForceOn((f) => ({ ...f, [key]: true }));
+    }
+  }
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
       <p className="text-sm text-slate-600">
         ค่าที่ตั้งในนี้จะมีผลกับ <strong>ทุกกฎ</strong> ในระบบ Payroll
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
-        {GLOBAL_SETTING_KEYS.map((cfg) => (
+        {GLOBAL_SETTING_KEYS.map((cfg) => {
+          const capEnabled = cfg.capToggle ? Number(settings[cfg.key] ?? 0) > 0 || !!forceOn[cfg.key] : true;
+          return (
           <div key={cfg.key}>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{cfg.label}</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-slate-700">{cfg.label}</label>
+              {cfg.capToggle && (
+                <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <input
+                    type="checkbox"
+                    checked={capEnabled}
+                    disabled={!canManage}
+                    onChange={(e) => toggleCap(cfg.key, e.target.checked)}
+                  />
+                  เปิดใช้งาน
+                </label>
+              )}
+            </div>
             {cfg.type === "select" ? (
               <select
                 disabled={!canManage}
@@ -464,7 +501,7 @@ function GlobalSettingsCard({
                 <input
                   type="number"
                   step="0.01"
-                  disabled={!canManage}
+                  disabled={!canManage || (!!cfg.capToggle && !capEnabled)}
                   value={(settings[cfg.key] as number | string) ?? ""}
                   onChange={(e) =>
                     setSettings({
@@ -472,13 +509,15 @@ function GlobalSettingsCard({
                       [cfg.key]: e.target.value === "" ? null : Number(e.target.value),
                     })
                   }
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder={cfg.capToggle && !capEnabled ? "ปิดใช้งาน" : undefined}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-400"
                 />
                 {cfg.suffix && <span className="text-slate-500 text-sm">{cfg.suffix}</span>}
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
       {canManage && (
         <div className="pt-2">
