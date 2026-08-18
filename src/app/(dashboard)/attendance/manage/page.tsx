@@ -378,9 +378,9 @@ export default function AttendanceManagePage() {
                           <span className="inline-flex items-center gap-1 text-emerald-700"><LogIn className="w-4 h-4" /> {fmtTime(row.check_in.checked_at)}</span>
                           {row.check_in.late_minutes ? <span className="text-xs text-muted">({row.check_in.late_minutes} นาที)</span> : null}
                           {row.check_in.source === "manual" ? (
-                            <Wand2 className="w-3 h-3 text-amber-600" title="เพิ่มย้อนหลังโดย HR" />
+                            <span title="เพิ่มย้อนหลังโดย HR"><Wand2 className="w-3 h-3 text-amber-600" /></span>
                           ) : (
-                            <Fingerprint className="w-3 h-3 text-teal-600" title="ซิงค์อัตโนมัติจากเครื่องสแกน HIP Time" />
+                            <span title="ซิงค์อัตโนมัติจากเครื่องสแกน HIP Time"><Fingerprint className="w-3 h-3 text-teal-600" /></span>
                           )}
                           <button onClick={() => openEdit(row, "check_in")} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="แก้ไข">
                             <Edit2 className="w-3.5 h-3.5" />
@@ -407,9 +407,9 @@ export default function AttendanceManagePage() {
                         <div className="flex items-center gap-1.5">
                           <span className="inline-flex items-center gap-1 text-rose-700"><LogOut className="w-4 h-4" /> {fmtTime(row.check_out.checked_at)}</span>
                           {row.check_out.source === "manual" ? (
-                            <Wand2 className="w-3 h-3 text-amber-600" title="เพิ่มย้อนหลังโดย HR" />
+                            <span title="เพิ่มย้อนหลังโดย HR"><Wand2 className="w-3 h-3 text-amber-600" /></span>
                           ) : (
-                            <Fingerprint className="w-3 h-3 text-teal-600" title="ซิงค์อัตโนมัติจากเครื่องสแกน HIP Time" />
+                            <span title="ซิงค์อัตโนมัติจากเครื่องสแกน HIP Time"><Fingerprint className="w-3 h-3 text-teal-600" /></span>
                           )}
                           <button onClick={() => openEdit(row, "check_out")} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="แก้ไข">
                             <Edit2 className="w-3.5 h-3.5" />
