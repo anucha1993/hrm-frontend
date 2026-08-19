@@ -17,9 +17,12 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   const isEmployee = user?.role?.name === "employee";
-  // Employee เห็นเฉพาะหน้าลงเวลาของตัวเอง (ไม่รวม /attendance/manage)
-  const allowedEmployeePaths = ["/attendance", "/attendance/history", "/attendance/profile"];
-  const blockedEmployeePaths = ["/attendance/manage"];
+  // Employee เห็นเฉพาะหน้าลงเวลาของตัวเองและงานที่ได้รับมอบหมาย
+  const allowedEmployeePaths = ["/attendance", "/attendance/history", "/attendance/profile", "/tasks"];
+  const blockedEmployeePaths = ["/attendance/manage", "/tasks/create"];
+  const isBlockedEmployeePath = (path: string) =>
+    blockedEmployeePaths.some((p) => path === p || path.startsWith(p + "/")) ||
+    /^\/tasks\/\d+\/edit$/.test(path);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -32,7 +35,7 @@ export default function DashboardLayout({
       user &&
       isEmployee &&
       (
-        blockedEmployeePaths.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
+        isBlockedEmployeePath(pathname) ||
         !allowedEmployeePaths.some((p) => pathname === p || pathname.startsWith(p + "/"))
       )
     ) {

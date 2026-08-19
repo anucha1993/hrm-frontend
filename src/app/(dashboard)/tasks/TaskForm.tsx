@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, ApiError } from "@/lib/api";
-import { CheckCircle2, AlertCircle, UserPlus, X } from "lucide-react";
+import { CheckCircle2, AlertCircle, UserPlus, X, ListChecks, Plus } from "lucide-react";
 
 type EmployeeBrief = {
   id: number;
@@ -12,6 +12,8 @@ type EmployeeBrief = {
   last_name: string;
   nickname?: string | null;
 };
+
+export type TaskItemInput = { id?: number; title: string };
 
 export type TaskInitial = {
   id?: number;
@@ -22,6 +24,7 @@ export type TaskInitial = {
   location_name: string;
   note: string;
   employee_ids: number[];
+  items: TaskItemInput[];
 };
 
 const DEFAULT_INITIAL: TaskInitial = {
@@ -32,6 +35,7 @@ const DEFAULT_INITIAL: TaskInitial = {
   location_name: "",
   note: "",
   employee_ids: [],
+  items: [],
 };
 
 export default function TaskForm({
@@ -82,6 +86,21 @@ export default function TaskForm({
     }));
   }
 
+  function addItem() {
+    setForm((p) => ({ ...p, items: [...p.items, { title: "" }] }));
+  }
+
+  function updateItem(index: number, title: string) {
+    setForm((p) => ({
+      ...p,
+      items: p.items.map((it, i) => (i === index ? { ...it, title } : it)),
+    }));
+  }
+
+  function removeItem(index: number) {
+    setForm((p) => ({ ...p, items: p.items.filter((_, i) => i !== index) }));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
@@ -103,6 +122,9 @@ export default function TaskForm({
       location_name: form.location_name || null,
       note: form.note || null,
       employee_ids: form.employee_ids,
+      items: form.items
+        .map((it) => ({ ...it, title: it.title.trim() }))
+        .filter((it) => it.title.length > 0),
     };
 
     setSaving(true);
@@ -252,6 +274,47 @@ export default function TaskForm({
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
         </div>
+      </div>
+
+      {/* Checklist items */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <ListChecks className="h-4 w-4 text-indigo-600" /> รายการงานย่อย
+            <span className="text-xs font-normal text-slate-400">(แยกใบมอบหมายเดียวเป็นหลายงาน เช่น เก็บขยะหน้าโรงงาน, ล้างห้องน้ำ)</span>
+          </h3>
+          <button
+            type="button"
+            onClick={addItem}
+            className="inline-flex items-center gap-1 rounded-lg border border-indigo-300 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+          >
+            <Plus className="h-3.5 w-3.5" /> เพิ่มงานย่อย
+          </button>
+        </div>
+        {form.items.length === 0 ? (
+          <p className="text-xs text-slate-400">ยังไม่มีงานย่อย (ไม่บังคับ — ถ้าไม่เพิ่ม จะใช้แค่หัวข้องานหลัก)</p>
+        ) : (
+          <ul className="space-y-2">
+            {form.items.map((it, i) => (
+              <li key={it.id ?? `new-${i}`} className="flex items-center gap-2">
+                <span className="w-5 shrink-0 text-xs text-slate-400">{i + 1}.</span>
+                <input
+                  value={it.title}
+                  onChange={(e) => updateItem(i, e.target.value)}
+                  placeholder="เช่น เก็บขยะหน้าโรงงาน"
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeItem(i)}
+                  className="text-slate-400 hover:text-rose-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Assignees */}

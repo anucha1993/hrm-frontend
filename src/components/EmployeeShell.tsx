@@ -2,18 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clock, History, User as UserIcon, LogOut, Briefcase } from "lucide-react";
+import { Clock, History, User as UserIcon, LogOut, Briefcase, ClipboardList } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
 const navItems = [
   { href: "/attendance", label: "ลงเวลา", icon: Clock },
+  { href: "/tasks", label: "งานที่ต้องทำ", icon: ClipboardList },
   { href: "/attendance/history", label: "ประวัติ", icon: History },
   { href: "/attendance/profile", label: "โปรไฟล์", icon: UserIcon },
 ];
 
 export default function EmployeeShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
+
+  const items = navItems.filter((item) => item.href !== "/tasks" || hasPermission("tasks.view"));
 
   const isActive = (href: string) =>
     href === "/attendance"
@@ -49,8 +52,8 @@ export default function EmployeeShell({ children }: { children: React.ReactNode 
 
       {/* Bottom navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-border shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
-        <ul className="grid grid-cols-3 max-w-md mx-auto">
-          {navItems.map((item) => {
+        <ul className="grid max-w-md mx-auto" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+          {items.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
             return (

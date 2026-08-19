@@ -16,8 +16,11 @@ import {
   CheckCircle2,
   AlertCircle,
   ArrowLeft,
-  Upload,
   XCircle,
+  Copy,
+  Check,
+  ListChecks,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -45,6 +48,36 @@ type Assignee = {
   rater?: { id: number; name: string } | null;
 };
 
+type TaskItemPhoto = {
+  id: number;
+  kind: "before" | "after";
+  photo_url: string;
+  employee_id: number | null;
+  uploader?: {
+    id: number;
+    employee_code: string;
+    first_name: string;
+    last_name: string;
+    nickname?: string | null;
+  } | null;
+};
+
+type TaskItem = {
+  id: number;
+  title: string;
+  sort_order: number;
+  is_completed: boolean;
+  completed_at: string | null;
+  completed_by?: {
+    id: number;
+    employee_code: string;
+    first_name: string;
+    last_name: string;
+    nickname?: string | null;
+  } | null;
+  photos: TaskItemPhoto[];
+};
+
 type Task = {
   id: number;
   code: string;
@@ -58,6 +91,7 @@ type Task = {
   created_at: string;
   creator?: { id: number; name: string } | null;
   assignees: Assignee[];
+  items: TaskItem[];
 };
 
 const STATUS_LABEL: Record<Task["status"], string> = {
@@ -103,6 +137,14 @@ export default function TaskDetailPage() {
   const [err, setErr] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showPrint, setShowPrint] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  async function copyTaskLink() {
+    await navigator.clipboard.writeText(`${window.location.origin}/tasks/${taskId}`);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }
 
   // Rating modal
   const [ratingFor, setRatingFor] = useState<Assignee | null>(null);
@@ -138,30 +180,6 @@ export default function TaskDetailPage() {
     setErr(msg);
     window.scrollTo({ top: 0, behavior: "smooth" });
     alert(msg);
-  }
-
-  async function uploadPhoto(
-    assignee: Assignee,
-    kind: "before" | "after",
-    file: File
-  ) {
-    setErr(null);
-    setSuccessMsg(null);
-    const fd = new FormData();
-    fd.append("kind", kind);
-    fd.append("photo", file);
-    try {
-      await apiFetch(`/tasks/${taskId}/assignees/${assignee.id}/photo`, {
-        method: "POST",
-        body: fd,
-      });
-      setSuccessMsg(`✔ อัปโหลดรูป${kind === "before" ? "ก่อนทำงาน" : "หลังทำงาน"}สำเร็จ`);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      setTimeout(() => setSuccessMsg(null), 3000);
-      await load();
-    } catch (e) {
-      handleError(e, "อัปโหลดรูปไม่สำเร็จ");
-    }
   }
 
   async function submitWork(assignee: Assignee) {
@@ -240,6 +258,40 @@ export default function TaskDetailPage() {
     }
   }
 
+  async function toggleItem(item: TaskItem) {
+    try {
+      await apiFetch(`/tasks/${taskId}/items/${item.id}/toggle`, { method: "POST" });
+      await load();
+    } catch (e) {
+      handleError(e, "อัปเดตงานย่อยไม่สำเร็จ");
+    }
+  }
+
+  async function uploadItemPhotos(item: TaskItem, kind: "before" | "after", files: FileList) {
+    const fd = new FormData();
+    fd.append("kind", kind);
+    Array.from(files).forEach((f) => fd.append("photos[]", f));
+    try {
+      await apiFetch(`/tasks/${taskId}/items/${item.id}/photos`, {
+        method: "POST",
+        body: fd,
+      });
+      await load();
+    } catch (e) {
+      handleError(e, "อัปโหลดรูปไม่สำเร็จ");
+    }
+  }
+
+  async function deleteItemPhoto(item: TaskItem, photo: TaskItemPhoto) {
+    if (!confirm("ลบรูปนี้?")) return;
+    try {
+      await apiFetch(`/tasks/${taskId}/items/${item.id}/photos/${photo.id}`, { method: "DELETE" });
+      await load();
+    } catch (e) {
+      handleError(e, "ลบรูปไม่สำเร็จ");
+    }
+  }
+
   if (loading) {
     return (
       <>
@@ -288,6 +340,13 @@ export default function TaskDetailPage() {
           </span>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={copyTaskLink}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            {linkCopied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+            {linkCopied ? "คัดลอกแล้ว" : "คัดลอกลิงก์"}
+          </button>
           <button
             onClick={() => setShowPrint(true)}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
@@ -346,6 +405,70 @@ export default function TaskDetailPage() {
         </div>
       </div>
 
+      {/* Checklist items */}
+      {task.items.length > 0 && (() => {
+        const isAssignee = task.assignees.some((a) => a.employee_id === myEmployeeId);
+        const canEdit = canManage || isAssignee;
+        const doneCount = task.items.filter((it) => it.is_completed).length;
+        return (
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <ListChecks className="h-4 w-4 text-indigo-600" /> รายการงานย่อย
+              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700">
+                {doneCount}/{task.items.length} เสร็จ
+              </span>
+            </h2>
+            <ul className="space-y-4">
+              {task.items.map((it) => (
+                <li key={it.id} className="rounded-lg border border-slate-100 p-3">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={it.is_completed}
+                      disabled={!canEdit}
+                      onChange={() => toggleItem(it)}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 disabled:opacity-50"
+                    />
+                    <div className="flex-1">
+                      <span className={it.is_completed ? "text-slate-400 line-through" : "font-medium text-slate-700"}>
+                        {it.title}
+                      </span>
+                      {it.is_completed && it.completed_by && (
+                        <div className="text-xs text-slate-400">
+                          โดย {it.completed_by.nickname || it.completed_by.first_name}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-2 grid gap-3 pl-6 md:grid-cols-2">
+                    <ItemPhotoGallery
+                      label="ภาพก่อนทำงาน (Before)"
+                      photos={it.photos.filter((p) => p.kind === "before")}
+                      canEdit={canEdit}
+                      myEmployeeId={myEmployeeId}
+                      isManager={canManage}
+                      onUpload={(files) => uploadItemPhotos(it, "before", files)}
+                      onDelete={(photo) => deleteItemPhoto(it, photo)}
+                      onView={setLightboxUrl}
+                    />
+                    <ItemPhotoGallery
+                      label="ภาพหลังทำงาน (After)"
+                      photos={it.photos.filter((p) => p.kind === "after")}
+                      canEdit={canEdit}
+                      myEmployeeId={myEmployeeId}
+                      isManager={canManage}
+                      onUpload={(files) => uploadItemPhotos(it, "after", files)}
+                      onDelete={(photo) => deleteItemPhoto(it, photo)}
+                      onView={setLightboxUrl}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
+
       {/* Assignees */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-700">
@@ -354,24 +477,24 @@ export default function TaskDetailPage() {
         {task.assignees.map((a) => {
           const isOwner =
             user?.employee_id != null && a.employee_id === user.employee_id;
+          const missingItems = task.items.filter(
+            (it) =>
+              !it.photos.some((p) => p.kind === "before") ||
+              !it.photos.some((p) => p.kind === "after")
+          );
+          const itemsOk = missingItems.length === 0;
           const canSubmit =
             isOwner &&
-            (a.status === "in_progress" || a.status === "rejected") &&
-            !!a.before_photo_url &&
-            !!a.after_photo_url;
-          const canUpload =
-            (isOwner || canManage) &&
-            a.status !== "approved" &&
-            a.status !== "submitted";
+            (a.status === "pending" || a.status === "in_progress" || a.status === "rejected") &&
+            itemsOk;
           return (
             <AssigneeCard
               key={a.id}
               assignee={a}
-              canUpload={canUpload}
               canSubmit={canSubmit}
               canRate={canManage && (a.status === "submitted" || a.status === "approved")}
               canReject={canManage && a.status === "submitted"}
-              onUpload={(kind, file) => uploadPhoto(a, kind, file)}
+              missingItems={isOwner ? missingItems.map((it) => it.title) : []}
               onSubmit={() => submitWork(a)}
               onRate={() => openRating(a)}
               onReject={() => rejectAssignee(a)}
@@ -435,6 +558,30 @@ export default function TaskDetailPage() {
       {showPrint && (
         <PrintModal task={task} onClose={() => setShowPrint(false)} />
       )}
+
+      {/* Photo lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 print:hidden"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-slate-700 hover:bg-white"
+            title="ปิด"
+          >
+            <XCircle className="h-6 w-6" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt="ภาพขยาย"
+            className="max-h-full max-w-full rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
       </div>
     </>
   );
@@ -451,27 +598,23 @@ function Row({ label, value }: { label: string; value: string | number }) {
 
 function AssigneeCard({
   assignee: a,
-  canUpload,
   canSubmit,
   canRate,
   canReject,
-  onUpload,
+  missingItems,
   onSubmit,
   onRate,
   onReject,
 }: {
   assignee: Assignee;
-  canUpload: boolean;
   canSubmit: boolean;
   canRate: boolean;
   canReject: boolean;
-  onUpload: (kind: "before" | "after", file: File) => void;
+  missingItems: string[];
   onSubmit: () => void;
   onRate: () => void;
   onReject: () => void;
 }) {
-  const beforeRef = useRef<HTMLInputElement>(null);
-  const afterRef = useRef<HTMLInputElement>(null);
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
@@ -507,34 +650,6 @@ function AssigneeCard({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <PhotoBox
-          label="ภาพก่อนทำงาน (Before)"
-          url={a.before_photo_url}
-          accentColor="border-slate-300"
-          onPick={() => beforeRef.current?.click()}
-          canUpload={canUpload}
-          inputRef={beforeRef}
-          onChange={(file) => onUpload("before", file)}
-        />
-        <PhotoBox
-          label="ภาพหลังทำงาน (After)"
-          url={a.after_photo_url}
-          accentColor="border-emerald-300"
-          onPick={() => afterRef.current?.click()}
-          canUpload={canUpload && a.status === "in_progress"}
-          inputRef={afterRef}
-          onChange={(file) => onUpload("after", file)}
-          hint={
-            !a.before_photo_url
-              ? "อัปโหลดภาพก่อนทำงานก่อน"
-              : a.status === "approved"
-                ? "งานผ่านแล้ว"
-                : undefined
-          }
-        />
-      </div>
-
       {a.submit_note && (
         <div className="mt-3 rounded-lg bg-slate-50 p-2 text-sm">
           <div className="text-xs text-slate-500">หมายเหตุการส่งงาน:</div>
@@ -545,6 +660,12 @@ function AssigneeCard({
         <div className="mt-2 rounded-lg bg-amber-50 p-2 text-sm">
           <div className="text-xs text-amber-700">ความเห็นจาก Admin:</div>
           <div className="text-amber-900">{a.rating_note}</div>
+        </div>
+      )}
+
+      {!canSubmit && missingItems.length > 0 && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-sm text-amber-700">
+          ต้องอัปโหลดรูปก่อนทำและหลังทำให้ครบก่อนส่งงาน ยังขาดที่: {missingItems.join(", ")}
         </div>
       )}
 
@@ -581,69 +702,74 @@ function AssigneeCard({
   );
 }
 
-function PhotoBox({
+function ItemPhotoGallery({
   label,
-  url,
-  accentColor,
-  onPick,
-  canUpload,
-  inputRef,
-  onChange,
-  hint,
+  photos,
+  canEdit,
+  myEmployeeId,
+  isManager,
+  onUpload,
+  onDelete,
+  onView,
 }: {
   label: string;
-  url: string | null;
-  accentColor: string;
-  onPick: () => void;
-  canUpload: boolean;
-  inputRef: React.RefObject<HTMLInputElement | null>;
-  onChange: (file: File) => void;
-  hint?: string;
+  photos: TaskItemPhoto[];
+  canEdit: boolean;
+  myEmployeeId: number | null;
+  isManager: boolean;
+  onUpload: (files: FileList) => void;
+  onDelete: (photo: TaskItemPhoto) => void;
+  onView: (url: string) => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   return (
     <div>
-      <div className="mb-1 text-sm font-medium text-slate-700">{label}</div>
-      {url ? (
-        <div className="group relative">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={url}
-            alt={label}
-            className={`h-48 w-full rounded-lg border-2 object-cover ${accentColor}`}
-          />
-          {canUpload && (
-            <button
-              type="button"
-              onClick={onPick}
-              className="absolute right-2 top-2 rounded-full bg-white/90 p-2 shadow opacity-0 group-hover:opacity-100"
-              title="เปลี่ยนรูป"
-            >
-              <Upload className="h-4 w-4 text-slate-700" />
-            </button>
-          )}
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={canUpload ? onPick : undefined}
-          disabled={!canUpload}
-          className={`flex h-48 w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed ${accentColor} bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50`}
-        >
-          <Camera className="h-10 w-10" />
-          <span className="text-xs">
-            {canUpload ? "แตะเพื่อถ่ายภาพ / อัปโหลด" : hint || "ยังไม่มีรูป"}
-          </span>
-        </button>
-      )}
+      <div className="mb-1 text-xs font-medium text-slate-600">{label}</div>
+      <div className="flex flex-wrap gap-2">
+        {photos.map((p) => {
+          const canDelete = isManager || (myEmployeeId != null && p.employee_id === myEmployeeId);
+          return (
+            <div key={p.id} className="group relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.photo_url}
+                alt={label}
+                onClick={() => onView(p.photo_url)}
+                className="h-20 w-20 cursor-zoom-in rounded-lg border border-slate-200 object-cover"
+              />
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(p)}
+                  className="absolute -right-1 -top-1 rounded-full bg-rose-600 p-0.5 text-white opacity-0 shadow group-hover:opacity-100"
+                  title="ลบรูป"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 hover:bg-slate-50"
+            title="เพิ่มรูป (เลือกได้หลายรูป)"
+          >
+            <Camera className="h-5 w-5" />
+            <span className="text-[10px]">เพิ่มรูป</span>
+          </button>
+        )}
+      </div>
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onChange(f);
+          if (e.target.files && e.target.files.length > 0) onUpload(e.target.files);
           e.target.value = "";
         }}
       />

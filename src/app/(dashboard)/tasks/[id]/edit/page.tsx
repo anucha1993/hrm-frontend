@@ -16,6 +16,7 @@ type TaskFull = {
   location_name: string | null;
   note: string | null;
   assignees: { employee_id: number }[];
+  items: { id: number; title: string }[];
 };
 
 export default function EditTaskPage() {
@@ -38,6 +39,7 @@ export default function EditTaskPage() {
           location_name: t.location_name ?? "",
           note: t.note ?? "",
           employee_ids: t.assignees.map((a) => a.employee_id),
+          items: t.items.map((it) => ({ id: it.id, title: it.title })),
         });
       } catch (e) {
         setErr(e instanceof ApiError ? e.message : "โหลดข้อมูลไม่สำเร็จ");
