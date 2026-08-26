@@ -251,19 +251,21 @@ export default function EmployeeAttendanceCalendarModal({
         });
       }
       let created = 0;
+      let updated = 0;
       let skipped = 0;
       if (hasNewEntry) {
-        const res = await apiFetch<{ summary: { created: number; skipped: number } }>("/attendance/manual-bulk", {
+        const res = await apiFetch<{ summary: { created: number; updated?: number; skipped: number } }>("/attendance/manual-bulk", {
           method: "POST",
           body: { employee_id: employee.id, reason: reason.trim(), days: [dayPayload] },
         });
         created = res.summary.created;
+        updated = res.summary.updated ?? 0;
         skipped = res.summary.skipped;
       }
       setMsg(
         needsOtUpdate
-          ? `บันทึกสำเร็จ (อัปเดตสถานะ OT/หมายเหตุของรายการเดิม${hasNewEntry ? ` + สร้าง ${created}, ข้าม ${skipped}` : ""})`
-          : `บันทึกสำเร็จ (สร้าง ${created}, ข้าม ${skipped})`
+          ? `บันทึกสำเร็จ (อัปเดตสถานะ OT/หมายเหตุของรายการเดิม${hasNewEntry ? ` + สร้าง ${created}, แก้ไข ${updated}, ข้าม ${skipped}` : ""})`
+          : `บันทึกสำเร็จ (สร้าง ${created}, แก้ไข ${updated}, ข้าม ${skipped})`
       );
       setReason("");
       await load();
@@ -349,13 +351,15 @@ export default function EmployeeAttendanceCalendarModal({
       }
 
       let created = 0;
+      let updated = 0;
       let skipped = 0;
       if (createDays.length > 0) {
-        const res = await apiFetch<{ summary: { created: number; skipped: number } }>("/attendance/manual-bulk", {
+        const res = await apiFetch<{ summary: { created: number; updated?: number; skipped: number } }>("/attendance/manual-bulk", {
           method: "POST",
           body: { employee_id: employee.id, reason: bulkReason.trim(), days: createDays },
         });
         created = res.summary.created;
+        updated = res.summary.updated ?? 0;
         skipped = res.summary.skipped;
       }
 
@@ -363,7 +367,7 @@ export default function EmployeeAttendanceCalendarModal({
         setBulkMsg("ไม่มีการเปลี่ยนแปลงที่จะบันทึก (เวลาที่กรอกตรงกับข้อมูลเดิมของทุกวันที่เลือกอยู่แล้ว)");
       } else {
         setBulkMsg(
-          `บันทึกสำเร็จ (สร้าง ${created}, ข้าม ${skipped}` +
+          `บันทึกสำเร็จ (สร้าง ${created}, แก้ไข ${updated}, ข้าม ${skipped}` +
           (otUpdated ? `, อัปเดต OT ${otUpdated} วัน` : "") +
           (otUpdateFailed ? `, อัปเดต OT ล้มเหลว ${otUpdateFailed} วัน` : "") +
           `) จาก ${selectedDays.size} วันที่เลือก`
