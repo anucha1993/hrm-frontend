@@ -19,12 +19,13 @@ function dayStatusInfo(s: AttendanceRosterRow["day_status"]) {
     day_off: { label: "วันหยุดประจำสัปดาห์", variant: "default" },
     absent: { label: "ขาดงาน", variant: "danger" },
     upcoming: { label: "ยังไม่ถึงวัน", variant: "default" },
+    no_track: { label: "งานเหมา / ไม่บันทึกเวลา", variant: "info" },
   };
   return map[s] || map.normal;
 }
 
 const ALL_DAY_STATUSES: AttendanceRosterRow["day_status"][] = [
-  "normal", "late", "early_leave", "overtime", "leave", "holiday", "day_off", "absent", "upcoming",
+  "normal", "late", "early_leave", "overtime", "leave", "holiday", "day_off", "absent", "upcoming", "no_track",
 ];
 
 function fmtTime(iso: string) {

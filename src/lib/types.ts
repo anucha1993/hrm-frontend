@@ -41,6 +41,7 @@ export type Department = {
   description?: string | null;
   work_profile_id?: number | null;
   work_profile?: WorkProfile | null;
+  attendance_mode?: "full" | "check_in_only" | "none";
   is_active: boolean;
 };
 
@@ -394,10 +395,10 @@ export type AttendanceRosterRow = {
     employee_code: string;
     first_name: string;
     last_name: string;
-    department?: { id: number; name: string } | null;
+    department?: { id: number; name: string; attendance_mode?: "full" | "check_in_only" | "none" } | null;
   };
   date: string;
-  day_status: "normal" | "late" | "early_leave" | "overtime" | "leave" | "holiday" | "day_off" | "absent" | "upcoming";
+  day_status: "normal" | "late" | "early_leave" | "overtime" | "leave" | "holiday" | "day_off" | "absent" | "upcoming" | "no_track";
   check_in: AttendanceRosterEntry | null;
   check_out: AttendanceRosterEntry | null;
   leave: { id: number; type: string; is_half_day: boolean } | null;

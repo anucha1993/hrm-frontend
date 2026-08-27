@@ -11,10 +11,12 @@ import { useAuth } from "@/lib/auth-context";
 export type MasterField = {
   key: string;
   label: string;
-  type?: "text" | "textarea";
+  type?: "text" | "textarea" | "select";
   required?: boolean;
   maxLength?: number;
   placeholder?: string;
+  options?: { value: string; label: string }[];
+  defaultValue?: string;
 };
 
 export type MasterRecord = {
@@ -64,7 +66,7 @@ export default function MasterDataPage({ title, endpoint, extraFields = [], code
 
   function openCreate() {
     const initial: Record<string, unknown> = { code: "", name: "", is_active: true };
-    extraFields.forEach((f) => (initial[f.key] = ""));
+    extraFields.forEach((f) => (initial[f.key] = f.defaultValue ?? ""));
     setForm(initial);
     setError(null);
     setShowModal(true);
@@ -186,7 +188,14 @@ export default function MasterDataPage({ title, endpoint, extraFields = [], code
                         <td className="px-5 py-3 text-sm font-medium text-foreground">{r.name}</td>
                         {extraFields.map((f) => (
                           <td key={f.key} className="px-5 py-3 text-sm text-muted">
-                            {(r[f.key] as string) ?? "-"}
+                            {(() => {
+                              const raw = r[f.key];
+                              if (f.type === "select" && f.options) {
+                                const found = f.options.find((o) => o.value === raw);
+                                return found?.label ?? (raw as string) ?? "-";
+                              }
+                              return (raw as string) ?? "-";
+                            })()}
                           </td>
                         ))}
                         <td className="px-5 py-3">
@@ -275,6 +284,16 @@ export default function MasterDataPage({ title, endpoint, extraFields = [], code
                       onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
                       className="w-full px-3 py-2 rounded-lg border border-border text-sm"
                     />
+                  ) : f.type === "select" ? (
+                    <select
+                      value={(form[f.key] as string) ?? ""}
+                      onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-white"
+                    >
+                      {(f.options ?? []).map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
                   ) : (
                     <input
                       maxLength={f.maxLength}

@@ -7,7 +7,20 @@ export default function DepartmentsPage() {
     <MasterDataPage
       title="จัดการแผนก"
       endpoint="departments"
-      extraFields={[{ key: "description", label: "คำอธิบาย", type: "textarea" }]}
+      extraFields={[
+        { key: "description", label: "คำอธิบาย", type: "textarea" },
+        {
+          key: "attendance_mode",
+          label: "โหมดบันทึกเวลา",
+          type: "select",
+          defaultValue: "full",
+          options: [
+            { value: "full", label: "สแกนเข้า+ออก (ปกติ)" },
+            { value: "check_in_only", label: "สแกนเข้าอย่างเดียว" },
+            { value: "none", label: "งานเหมา / ไม่บันทึกเวลา" },
+          ],
+        },
+      ]}
     />
   );
 }
