@@ -193,7 +193,14 @@ export default function GoodsDepositsPage() {
                       const st = STATUS_LABEL[d.status];
                       return (
                         <tr key={d.id} className="hover:bg-surface/50">
-                          <td className="px-4 py-3 text-sm font-mono text-foreground">{d.slip_no}</td>
+                          <td className="px-4 py-3 text-sm font-mono text-foreground">
+                            <div className="flex items-center gap-2">
+                              {d.slip_no}
+                              {d.source === "labour_api" && (
+                                <Badge label="Auto (Labour API)" variant="info" />
+                              )}
+                            </div>
+                          </td>
                           <td className="px-4 py-3 text-sm text-muted">{fmtDate(d.deposit_date)}</td>
                           <td className="px-4 py-3">
                             {d.employee ? (

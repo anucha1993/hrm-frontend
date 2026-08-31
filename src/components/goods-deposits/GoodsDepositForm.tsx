@@ -144,7 +144,10 @@ export default function GoodsDepositForm({ initial }: Props) {
             <ArrowLeft className="w-4 h-4" /> กลับ
           </Link>
           {initial && (
-            <Badge label={STATUS_LABEL[initial.status].label} variant={STATUS_LABEL[initial.status].variant} />
+            <div className="flex items-center gap-2">
+              <Badge label={STATUS_LABEL[initial.status].label} variant={STATUS_LABEL[initial.status].variant} />
+              {initial.source === "labour_api" && <Badge label="Auto (Labour API)" variant="info" />}
+            </div>
           )}
         </div>
 

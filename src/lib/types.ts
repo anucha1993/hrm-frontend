@@ -452,6 +452,7 @@ export type GoodsDepositSlip = {
   payslip_id: number | null;
   deducted_at: string | null;
   created_by: number | null;
+  source?: "manual" | "labour_api";
   note?: string | null;
   created_at: string;
   updated_at: string;
@@ -466,4 +467,5 @@ export type GoodsDepositSlip = {
   payslip?: { id: number; slip_no: string } | null;
   creator?: { id: number; name: string } | null;
 };
+
 
