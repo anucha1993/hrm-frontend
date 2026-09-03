@@ -397,6 +397,8 @@ export default function AttendanceManagePage() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
+                      ) : row.day_status === "leave" ? (
+                        <span className="text-xs text-muted italic" title="วันลา ไม่สามารถเพิ่มเวลาเข้างานได้">- ลา -</span>
                       ) : (
                         <button onClick={() => openCreate(row, "check_in")} className="inline-flex items-center gap-1 text-xs text-muted hover:text-primary-600" title="เพิ่มเวลาเข้างาน">
                           <Plus className="w-3.5 h-3.5" /> เพิ่ม
@@ -426,6 +428,8 @@ export default function AttendanceManagePage() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
+                      ) : row.day_status === "leave" ? (
+                        <span className="text-xs text-muted italic" title="วันลา ไม่สามารถเพิ่มเวลาออกงานได้">- ลา -</span>
                       ) : (
                         <button onClick={() => openCreate(row, "check_out")} className="inline-flex items-center gap-1 text-xs text-muted hover:text-primary-600" title="เพิ่มเวลาออกงาน">
                           <Plus className="w-3.5 h-3.5" /> เพิ่ม
@@ -463,13 +467,17 @@ export default function AttendanceManagePage() {
                 <div className="mt-2 flex items-center gap-3 flex-wrap text-xs">
                   <span className="inline-flex items-center gap-1 text-emerald-700">
                     <LogIn className="w-3.5 h-3.5" />
-                    {row.check_in ? fmtTime(row.check_in.checked_at) : (
+                    {row.check_in ? fmtTime(row.check_in.checked_at) : row.day_status === "leave" ? (
+                      <span className="text-muted italic">- ลา -</span>
+                    ) : (
                       <button onClick={() => openCreate(row, "check_in")} className="text-muted underline">เพิ่ม</button>
                     )}
                   </span>
                   <span className="inline-flex items-center gap-1 text-rose-700">
                     <LogOut className="w-3.5 h-3.5" />
-                    {row.check_out ? fmtTime(row.check_out.checked_at) : (
+                    {row.check_out ? fmtTime(row.check_out.checked_at) : row.day_status === "leave" ? (
+                      <span className="text-muted italic">- ลา -</span>
+                    ) : (
                       <button onClick={() => openCreate(row, "check_out")} className="text-muted underline">เพิ่ม</button>
                     )}
                   </span>

@@ -17,7 +17,9 @@ type EmpRow = {
   employee_code: string;
   employee_name: string;
   department: string | null;
+  no_track?: boolean;
   present_days: number;
+  leave_days: number;
   absent_days: number;
   late_days: number;
   late_minutes: number;
@@ -29,6 +31,7 @@ type Data = {
   totals: {
     employees: number;
     present_days: number;
+    leave_days: number;
     late_days: number;
     late_minutes: number;
   };
@@ -48,7 +51,7 @@ function defaultRange() {
   return { from: iso(from), to: iso(to) };
 }
 
-type SortKey = "employee_code" | "department" | "present_days" | "late_days" | "late_minutes" | "attendance_rate";
+type SortKey = "employee_code" | "department" | "present_days" | "leave_days" | "late_days" | "late_minutes" | "attendance_rate";
 
 export default function ReportAttendancePage() {
   const initial = defaultRange();
@@ -215,6 +218,10 @@ export default function ReportAttendancePage() {
                 tone="positive"
               />
               <StatCard
+                label="วันลารวม (อนุมัติแล้ว)"
+                value={formatNumber(data.totals.leave_days)}
+              />
+              <StatCard
                 label="ครั้งที่สาย"
                 value={formatNumber(data.totals.late_days)}
                 tone="warning"
@@ -239,6 +246,7 @@ export default function ReportAttendancePage() {
                       <th className="px-3 py-2 text-left">ชื่อ-นามสกุล</th>
                       <SortTh k="department" label="แผนก" />
                       <SortTh k="present_days" label="มาทำงาน" align="right" />
+                      <SortTh k="leave_days" label="ลา" align="right" />
                       <th className="px-3 py-2 text-right">ขาด</th>
                       <SortTh k="late_days" label="สาย (ครั้ง)" align="right" />
                       <SortTh k="late_minutes" label="นาทีสาย" align="right" />
@@ -248,7 +256,7 @@ export default function ReportAttendancePage() {
                   <tbody className="divide-y divide-slate-100">
                     {rows.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                        <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
                           ไม่พบข้อมูล
                         </td>
                       </tr>
@@ -266,8 +274,11 @@ export default function ReportAttendancePage() {
                           <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
                             {r.present_days}
                           </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-sky-700">
+                            {r.leave_days || "-"}
+                          </td>
                           <td className="px-3 py-2 text-right tabular-nums text-slate-500">
-                            {r.absent_days}
+                            {r.no_track ? <span className="text-xs italic text-slate-400" title="งานเหมา / ไม่บันทึกเวลา">—</span> : r.absent_days}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-amber-700">
                             {r.late_days}

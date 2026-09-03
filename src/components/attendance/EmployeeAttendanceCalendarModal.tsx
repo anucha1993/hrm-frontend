@@ -5,6 +5,15 @@ import { X, ChevronLeft, ChevronRight, Loader2, AlertTriangle, Clock, CalendarOf
 import { apiFetch, ApiError } from "@/lib/api";
 import { Attendance, ShiftDayOverride } from "@/lib/types";
 
+type LeaveLite = {
+  id: number;
+  start_date: string;
+  end_date: string;
+  is_half_day: boolean;
+  status: "draft" | "pending" | "approved" | "rejected" | "cancelled";
+  leave_type?: { name: string; color: string } | null;
+};
+
 const TZ = "Asia/Bangkok";
 const WEEKDAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
@@ -71,6 +80,7 @@ type DayCell = {
   checkIn?: Attendance;
   checkOut?: Attendance;
   override?: ShiftDayOverride;
+  leave?: LeaveLite;
 };
 
 
@@ -90,6 +100,7 @@ export default function EmployeeAttendanceCalendarModal({
   const [cursor, setCursor] = useState(() => new Date());
   const [records, setRecords] = useState<Attendance[]>([]);
   const [overrides, setOverrides] = useState<ShiftDayOverride[]>([]);
+  const [leaves, setLeaves] = useState<LeaveLite[]>([]);
   const [loading, setLoading] = useState(false);
 
   // multi-select mode (select many days to set the same time / mark as holiday at once)
@@ -138,12 +149,14 @@ export default function EmployeeAttendanceCalendarModal({
     try {
       const from = ymd(monthStart);
       const to = ymd(monthEnd);
-      const [attRes, ovRes] = await Promise.all([
+      const [attRes, ovRes, leaveRes] = await Promise.all([
         apiFetch<{ data: { data: Attendance[] } }>(`/attendance?employee_id=${employee.id}&from=${from}&to=${to}&per_page=200`),
         apiFetch<{ data: ShiftDayOverride[] }>(`/shift-overrides?employee_id=${employee.id}&from=${from}&to=${to}`),
+        apiFetch<{ data: { data: LeaveLite[] } }>(`/leave/requests?employee_id=${employee.id}&from=${from}&to=${to}&per_page=100`),
       ]);
       setRecords(attRes.data.data || []);
       setOverrides(ovRes.data || []);
+      setLeaves((leaveRes.data.data || []).filter((l) => l.status === "approved" || l.status === "pending"));
     } catch (e) {
       setErr(apiErrMsg(e, "โหลดข้อมูลไม่สำเร็จ"));
     } finally {
@@ -153,6 +166,24 @@ export default function EmployeeAttendanceCalendarModal({
   }, [open, employee?.id, monthStart, monthEnd]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ขยายช่วงวันที่ลาแต่ละใบเป็นรายวัน เพื่อจับคู่กับวันในปฏิทิน (ใบลาอาจเริ่ม/จบนอกเดือนที่ดูอยู่)
+  // start_date/end_date จาก backend เป็น ISO datetime เต็ม (เช่น 2026-09-03T00:00:00.000000Z) อยู่แล้ว
+  // ห้าม concat "T00:00:00" ต่อท้ายซ้ำ จะได้ Invalid Date แล้วลูปด้านล่างจะไม่ทำงานเลย
+  const leaveByDate = useMemo(() => {
+    const map = new Map<string, LeaveLite>();
+    for (const l of leaves) {
+      const start = new Date(l.start_date);
+      const end = new Date(l.end_date);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = ymd(d);
+        // อนุมัติแล้วมีสิทธิ์เหนือกว่ารออนุมัติเสมอ
+        const existing = map.get(key);
+        if (!existing || (existing.status !== "approved" && l.status === "approved")) map.set(key, l);
+      }
+    }
+    return map;
+  }, [leaves]);
 
   const cells: DayCell[] = useMemo(() => {
     const byDate = new Map<string, { checkIn?: Attendance; checkOut?: Attendance }>();
@@ -176,7 +207,7 @@ export default function EmployeeAttendanceCalendarModal({
       const d = new Date(cursor.getFullYear(), cursor.getMonth(), day);
       const key = ymd(d);
       const entry = byDate.get(key) ?? {};
-      out.push({ date: key, inMonth: true, checkIn: entry.checkIn, checkOut: entry.checkOut, override: overrideByDate.get(key) });
+      out.push({ date: key, inMonth: true, checkIn: entry.checkIn, checkOut: entry.checkOut, override: overrideByDate.get(key), leave: leaveByDate.get(key) });
     }
     while (out.length % 7 !== 0) {
       const last = new Date(out[out.length - 1].date + "T00:00:00");
@@ -184,7 +215,7 @@ export default function EmployeeAttendanceCalendarModal({
       out.push({ date: ymd(last), inMonth: false });
     }
     return out;
-  }, [records, overrides, monthStart, monthEnd, cursor]);
+  }, [records, overrides, leaveByDate, monthStart, monthEnd, cursor]);
 
   function selectDay(cell: DayCell) {
     if (multiMode) {
@@ -217,6 +248,9 @@ export default function EmployeeAttendanceCalendarModal({
 
   const selectedCell = selected ? cells.find((c) => c.date === selected) : undefined;
   const selectedOverride = selectedCell?.override;
+  const selectedFullDayLeave = selectedCell?.leave && !selectedCell.leave.is_half_day && selectedCell.leave.status === "approved"
+    ? selectedCell.leave
+    : undefined;
 
   async function submitDay() {
     if (!employee || !selected) return;
@@ -476,6 +510,7 @@ export default function EmployeeAttendanceCalendarModal({
                 const isLate = c.checkIn?.status === "late";
                 const isOtDay = c.checkOut?.status === "overtime";
                 const isDayOff = !!c.override?.is_day_off;
+                const isFullDayLeave = !!c.leave && !c.leave.is_half_day && c.leave.status === "approved";
                 const isSelected = multiMode ? selectedDays.has(c.date) : selected === c.date;
                 return (
                   <button
@@ -488,9 +523,11 @@ export default function EmployeeAttendanceCalendarModal({
                         ? "border-transparent text-slate-300 cursor-default"
                         : isSelected
                           ? "border-primary-500 ring-2 ring-primary-200 bg-primary-50"
-                          : isDayOff
-                            ? "border-orange-200 bg-orange-50 hover:bg-orange-100"
-                            : "border-slate-200 hover:bg-slate-50"
+                          : isFullDayLeave
+                            ? "border-sky-200 bg-sky-50 hover:bg-sky-100"
+                            : isDayOff
+                              ? "border-orange-200 bg-orange-50 hover:bg-orange-100"
+                              : "border-slate-200 hover:bg-slate-50"
                     }`}
                   >
                     <div className={`font-medium ${isLate ? "text-amber-600" : ""}`}>
@@ -498,6 +535,14 @@ export default function EmployeeAttendanceCalendarModal({
                     </div>
                     {c.inMonth && isDayOff && (
                       <div className="mt-1 text-orange-600 leading-tight font-medium">วันหยุด</div>
+                    )}
+                    {c.inMonth && c.leave && (
+                      <div
+                        className={`mt-1 leading-tight font-medium ${c.leave.status === "pending" ? "text-sky-500 italic" : "text-sky-700"}`}
+                      >
+                        {c.leave.leave_type?.name ?? "ลา"}{c.leave.is_half_day ? " (ครึ่งวัน)" : ""}
+                        {c.leave.status === "pending" ? " (รออนุมัติ)" : ""}
+                      </div>
                     )}
                     {c.inMonth && (hasIn || hasOut) && (
                       <div className="mt-1 space-y-0.5">
@@ -613,6 +658,16 @@ export default function EmployeeAttendanceCalendarModal({
                 </div>
               )}
 
+              {selectedCell?.leave && (
+                <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 text-sm text-sky-700">
+                  วันนี้มีใบลา{selectedCell.leave.leave_type ? ` (${selectedCell.leave.leave_type.name})` : ""}
+                  {selectedCell.leave.is_half_day ? " ครึ่งวัน" : ""}
+                  {selectedCell.leave.status === "pending" ? " — รออนุมัติ" : " — อนุมัติแล้ว"}
+                  {selectedFullDayLeave && " ไม่สามารถเพิ่ม/แก้ไขเวลาเข้า-ออกงานได้ในวันนี้"}
+                </div>
+              )}
+
+              {!selectedFullDayLeave && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">เวลาเข้างาน</label>
@@ -623,22 +678,29 @@ export default function EmployeeAttendanceCalendarModal({
                   <TimeField value={checkOut} onChange={setCheckOut} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
               </div>
+              )}
+              {!selectedFullDayLeave && (
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={isOt} onChange={(e) => setIsOt(e.target.checked)} className="rounded border-slate-300" />
                 ระบุว่าวันนี้เป็นวัน OT (ล่วงเวลา){selectedOverride?.is_day_off ? " — มาทำงานในวันหยุด" : ""}
               </label>
+              )}
 
+              {!selectedFullDayLeave && (
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุ</label>
                 <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="(ถ้ามี)" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
               </div>
+              )}
 
+              {!selectedFullDayLeave && (
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   เหตุผล (ใช้กับ &quot;บันทึกเวลา&quot;) * <span className="font-normal text-slate-400">(บังคับ — เก็บใน audit log)</span>
                 </label>
                 <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เช่น พนักงานลืมลงเวลา" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
               </div>
+              )}
 
               {err && (
                 <div className="bg-rose-50 text-rose-700 text-sm rounded-lg p-2 flex items-center gap-2">
@@ -649,7 +711,7 @@ export default function EmployeeAttendanceCalendarModal({
 
               <div className="flex justify-end gap-2 flex-wrap">
                 <button type="button" onClick={() => setSelected(null)} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300">ปิด</button>
-                {!selectedOverride?.is_day_off && (
+                {!selectedFullDayLeave && !selectedOverride?.is_day_off && (
                   <button
                     type="button"
                     onClick={() => markDayOff(selected, note)}
@@ -660,6 +722,7 @@ export default function EmployeeAttendanceCalendarModal({
                     แจ้งเป็นวันหยุด
                   </button>
                 )}
+                {!selectedFullDayLeave && (
                 <button
                   type="button"
                   onClick={submitDay}
@@ -669,6 +732,7 @@ export default function EmployeeAttendanceCalendarModal({
                   {busy && <Loader2 className="w-4 h-4 animate-spin" />}
                   บันทึกเวลา
                 </button>
+                )}
               </div>
             </div>
           )}

@@ -12,7 +12,10 @@ import {
   type LeaveRequest,
   type LeaveType,
 } from "@/lib/leave";
-import { Plus, X, Loader2, AlertCircle, CalendarOff, Trash2, Download } from "lucide-react";
+import type { Employee } from "@/lib/types";
+import EmployeeCombobox from "@/components/EmployeeCombobox";
+import { useAuth } from "@/lib/auth-context";
+import { Plus, X, Loader2, AlertCircle, CalendarOff, Trash2, Download, UserPlus } from "lucide-react";
 
 type Form = {
   leave_type_id: number | "";
@@ -22,6 +25,8 @@ type Form = {
   half_day_period: "morning" | "afternoon";
   reason: string;
   contact_phone: string;
+  on_behalf: boolean;
+  employee_id: string;
 };
 
 const empty: Form = {
@@ -32,12 +37,17 @@ const empty: Form = {
   half_day_period: "morning",
   reason: "",
   contact_phone: "",
+  on_behalf: false,
+  employee_id: "",
 };
 
 export default function MyLeavePage() {
+  const { hasPermission } = useAuth();
+  const canFileForOthers = hasPermission("leave.config");
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Form>(empty);
@@ -64,13 +74,27 @@ export default function MyLeavePage() {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!canFileForOthers) return;
+    apiFetch<{ data: { data: Employee[] } | Employee[] } | Employee[]>("/employees?per_page=500")
+      .then((res) => {
+        const list = Array.isArray(res)
+          ? res
+          : Array.isArray(res.data)
+          ? res.data
+          : res.data.data;
+        setEmployees(list);
+      })
+      .catch(() => undefined);
+  }, [canFileForOthers]);
+
   const selectedType = useMemo(
     () => types.find((t) => t.id === form.leave_type_id),
     [types, form.leave_type_id],
   );
 
-  function openCreate() {
-    setForm({ ...empty, leave_type_id: types[0]?.id ?? "" });
+  function openCreate(onBehalf = false) {
+    setForm({ ...empty, leave_type_id: types[0]?.id ?? "", on_behalf: onBehalf });
     setErr(null);
     setShowForm(true);
   }
@@ -78,6 +102,10 @@ export default function MyLeavePage() {
   async function submit() {
     if (!form.leave_type_id) {
       setErr("กรุณาเลือกประเภทการลา");
+      return;
+    }
+    if (form.on_behalf && !form.employee_id) {
+      setErr("กรุณาเลือกพนักงานที่จะยื่นใบลาแทน");
       return;
     }
     setSubmitting(true);
@@ -93,6 +121,7 @@ export default function MyLeavePage() {
           half_day_period: form.is_half_day ? form.half_day_period : null,
           reason: form.reason || null,
           contact_phone: form.contact_phone || null,
+          ...(form.on_behalf && form.employee_id ? { employee_id: Number(form.employee_id) } : {}),
         },
       });
       setShowForm(false);
@@ -174,8 +203,16 @@ export default function MyLeavePage() {
             >
               <Download className="w-4 h-4" /> ดาวน์โหลด Excel
             </button>
+            {canFileForOthers && (
+              <button
+                onClick={() => openCreate(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-primary-300 text-primary-700 bg-white text-sm font-semibold hover:bg-primary-50"
+              >
+                <UserPlus className="w-4 h-4" /> ยื่นแทนพนักงาน
+              </button>
+            )}
             <button
-              onClick={openCreate}
+              onClick={() => openCreate(false)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl text-sm font-semibold hover:from-primary-600 hover:to-accent-600"
             >
               <Plus className="w-4 h-4" /> ยื่นใบลา
@@ -253,12 +290,34 @@ export default function MyLeavePage() {
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-              <h3 className="font-semibold">ยื่นใบลา</h3>
+              <h3 className="font-semibold">
+                {form.on_behalf ? "ยื่นใบลาแทนพนักงาน (HR)" : "ยื่นใบลา"}
+              </h3>
               <button onClick={() => setShowForm(false)} className="text-muted hover:text-foreground">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-5 space-y-3">
+              {canFileForOthers && (
+                <label className="flex items-center gap-2 text-sm bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={form.on_behalf}
+                    onChange={(e) => setForm({ ...form, on_behalf: e.target.checked, employee_id: "" })}
+                  />
+                  <span className="text-amber-900">ยื่นแทนพนักงานอื่น (โหมด HR)</span>
+                </label>
+              )}
+              {form.on_behalf && (
+                <Field label="พนักงาน *">
+                  <EmployeeCombobox
+                    employees={employees}
+                    value={form.employee_id}
+                    onChange={(id) => setForm({ ...form, employee_id: id })}
+                    className="w-full pl-3 pr-8 py-2 rounded-lg border border-border text-sm bg-white"
+                  />
+                </Field>
+              )}
               <Field label="ประเภทการลา *">
                 <select
                   className="payroll-input"
@@ -321,7 +380,10 @@ export default function MyLeavePage() {
                   {selectedType.requires_approval && <div>• ต้องได้รับการอนุมัติ</div>}
                   {selectedType.requires_attachment && <div>• ต้องแนบใบรับรอง</div>}
                   {selectedType.min_advance_notice_days > 0 && (
-                    <div>• ต้องแจ้งล่วงหน้า {selectedType.min_advance_notice_days} วัน</div>
+                    <div>
+                      • ต้องแจ้งล่วงหน้า {selectedType.min_advance_notice_days} วัน
+                      {form.on_behalf && <span className="text-amber-700"> (HR ยื่นแทนได้โดยไม่ติดเงื่อนไขนี้)</span>}
+                    </div>
                   )}
                   {selectedType.max_consecutive_days && (
                     <div>• ลาติดกันได้ไม่เกิน {selectedType.max_consecutive_days} วัน</div>
