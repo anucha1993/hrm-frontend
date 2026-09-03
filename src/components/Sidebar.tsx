@@ -121,10 +121,10 @@ const menuItems: MenuItem[] = [
     label: "กำหนดการจ่ายการผลิต",
     href: "/payroll/production-rates",
     icon: Factory,
-    permission: ["payroll.view", "payroll.config"],
+    permission: ["payroll.view", "payroll.config", "production.view", "production.manage"],
     children: [
-      { label: "เรทค่าจ้างการผลิต", href: "/payroll/production-rates", permission: "payroll.view" },
-      { label: "ใบจ่ายงาน", href: "/payroll/work-orders", permission: "payroll.view" },
+      { label: "เรทค่าจ้างการผลิต", href: "/payroll/production-rates", permission: ["payroll.view", "production.view"] },
+      { label: "ใบจ่ายงาน", href: "/payroll/work-orders", permission: ["payroll.view", "production.view"] },
       { label: "นำเข้า Payroll", href: "/payroll/work-orders/import", permission: "payroll.config" },
     ],
   },
