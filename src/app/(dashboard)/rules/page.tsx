@@ -16,7 +16,14 @@ import {
   TrendingDown,
   TrendingUp,
   Settings2,
+  Target,
 } from "lucide-react";
+import ProductionAdvanceRulesTab from "./ProductionAdvanceRulesTab";
+
+const MONTH_LABELS = [
+  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+];
 
 /* ============== Types ============== */
 
@@ -43,6 +50,8 @@ type Rule = {
   effective_from: string | null;
   effective_to: string | null;
   note: string | null;
+  department_ids: number[] | null;
+  apply_months: number[] | null;
 };
 
 type Option = { value: string; label: string; unit?: string };
@@ -83,7 +92,7 @@ export default function RulesPage() {
   const { hasPermission } = useAuth();
   const canManage = hasPermission("settings.manage");
 
-  const [tab, setTab] = useState<"deduction" | "bonus" | "global">("deduction");
+  const [tab, setTab] = useState<"deduction" | "bonus" | "global" | "production_advance">("deduction");
   const [rules, setRules] = useState<Rule[]>([]);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [settings, setSettings] = useState<Record<string, unknown>>({});
@@ -167,7 +176,7 @@ export default function RulesPage() {
             <Shield className="size-5 text-slate-600" />
             <h1 className="text-xl font-semibold">กฎหัก / เพิ่มเงิน และการตั้งค่ารวม</h1>
           </div>
-          {canManage && tab !== "global" && (
+          {canManage && (tab === "deduction" || tab === "bonus") && (
             <button
               type="button"
               onClick={() => setCreatingType(tab)}
@@ -208,6 +217,9 @@ export default function RulesPage() {
           <TabBtn active={tab === "global"} onClick={() => setTab("global")}>
             <Settings2 className="size-4" /> การตั้งค่ารวม
           </TabBtn>
+          <TabBtn active={tab === "production_advance"} onClick={() => setTab("production_advance")}>
+            <Target className="size-4" /> เป้าหมายผลิตก่อนเบิกเงิน
+          </TabBtn>
         </div>
 
         {/* Content */}
@@ -220,6 +232,8 @@ export default function RulesPage() {
             canManage={canManage}
             onSave={saveSettings}
           />
+        ) : tab === "production_advance" ? (
+          <ProductionAdvanceRulesTab canManage={canManage} />
         ) : (
           <RuleList
             rules={tab === "deduction" ? deductions : bonuses}
@@ -557,6 +571,8 @@ type FormState = {
   effective_from: string;
   effective_to: string;
   note: string;
+  department_ids: number[];
+  apply_months: number[];
 };
 
 function ruleToForm(r: Rule | null, createType: "deduction" | "bonus" | null): FormState {
@@ -582,6 +598,8 @@ function ruleToForm(r: Rule | null, createType: "deduction" | "bonus" | null): F
       effective_from: r.effective_from ?? "",
       effective_to: r.effective_to ?? "",
       note: r.note ?? "",
+      department_ids: r.department_ids ?? [],
+      apply_months: r.apply_months ?? [],
     };
   }
   return {
@@ -605,6 +623,8 @@ function ruleToForm(r: Rule | null, createType: "deduction" | "bonus" | null): F
     effective_from: "",
     effective_to: "",
     note: "",
+    department_ids: [],
+    apply_months: [],
   };
 }
 
@@ -624,6 +644,13 @@ function RuleFormModal({
   const [form, setForm] = useState<FormState>(() => ruleToForm(rule, createType));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    apiFetch<{ data: { id: number; name: string }[] }>("/departments")
+      .then((r) => setDepartments(r.data))
+      .catch(() => {});
+  }, []);
 
   const isTiered = form.accumulation_mode === "tiered";
   const isNoDQ = form.trigger === "no_disqualifier";
@@ -639,6 +666,18 @@ function RuleFormModal({
       "disqualifiers",
       has ? form.disqualifiers.filter((d) => d !== value) : [...form.disqualifiers, value],
     );
+  }
+
+  function toggleDept(id: number) {
+    set("department_ids", form.department_ids.includes(id)
+      ? form.department_ids.filter((d) => d !== id)
+      : [...form.department_ids, id]);
+  }
+
+  function toggleMonth(m: number) {
+    set("apply_months", form.apply_months.includes(m)
+      ? form.apply_months.filter((x) => x !== m)
+      : [...form.apply_months, m]);
   }
 
   function addTier() {
@@ -679,6 +718,8 @@ function RuleFormModal({
         effective_from: form.effective_from || null,
         effective_to: form.effective_to || null,
         note: form.note || null,
+        department_ids: form.department_ids.length ? form.department_ids : null,
+        apply_months: form.apply_months.length ? form.apply_months : null,
       };
       if (rule) {
         await apiFetch(`/payroll-rules/${rule.id}`, { method: "PUT", body });
@@ -1022,6 +1063,37 @@ function RuleFormModal({
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
           </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="บังคับใช้เฉพาะแผนก (เว้นว่าง = ทุกแผนก)">
+              <div className="max-h-32 overflow-y-auto rounded-lg border border-slate-300 p-2 grid grid-cols-2 gap-1">
+                {departments.map((d) => (
+                  <label key={d.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.department_ids.includes(d.id)}
+                      onChange={() => toggleDept(d.id)}
+                    />
+                    {d.name}
+                  </label>
+                ))}
+              </div>
+            </Field>
+            <Field label="บังคับใช้เฉพาะเดือน (เว้นว่าง = ทุกเดือน — ใช้กับโบนัสรายปี จ่ายครั้งเดียวงวดแรกของเดือนนั้น)">
+              <div className="rounded-lg border border-slate-300 p-2 grid grid-cols-4 gap-1">
+                {MONTH_LABELS.map((label, idx) => (
+                  <label key={idx} className="flex items-center gap-1 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.apply_months.includes(idx + 1)}
+                      onChange={() => toggleMonth(idx + 1)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </Field>
+          </div>
 
           <label className="flex items-center gap-2 text-sm">
             <input

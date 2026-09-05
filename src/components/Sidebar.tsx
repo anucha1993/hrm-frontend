@@ -20,6 +20,7 @@ import {
   Factory,
   Receipt,
   HandCoins,
+  BookOpen,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -169,7 +170,13 @@ const menuItems: MenuItem[] = [
       { label: "สถานที่ทำงาน", href: "/settings/locations", permission: "attendance.manage" },
       { label: "กะการทำงาน", href: "/settings/shifts", permission: "attendance.manage" },
       { label: "HIP Time / เซลฟี่เข้างาน", href: "/settings/hiptime", permission: "attendance.manage" },
+      { label: "เบิกเงินผ่านเครื่อง Tiger", href: "/settings/tiger-voucher", permission: "settings.view" },
     ],
+  },
+  {
+    label: "คู่มือการใช้งานระบบ",
+    href: "/manual",
+    icon: BookOpen,
   },
 ];
 

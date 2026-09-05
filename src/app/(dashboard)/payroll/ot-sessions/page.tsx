@@ -12,6 +12,7 @@ interface Employee {
   first_name: string;
   last_name: string;
   status: string;
+  department?: { id: number; name: string; ot_eligible?: boolean } | null;
 }
 
 type SessionForm = {
@@ -352,19 +353,24 @@ export default function OtSessionsPage() {
                 <div className="border border-border rounded-lg max-h-72 overflow-y-auto">
                   {employees.map((e) => {
                     const picked = form.employees.find((x) => x.employee_id === e.id);
+                    const ineligible = e.department?.ot_eligible === false;
                     return (
                       <div
                         key={e.id}
-                        className="flex items-center gap-3 px-3 py-2 border-b border-border last:border-0"
+                        className={`flex items-center gap-3 px-3 py-2 border-b border-border last:border-0 ${ineligible ? "opacity-60" : ""}`}
                       >
                         <input
                           type="checkbox"
                           checked={!!picked}
+                          disabled={ineligible && !picked}
                           onChange={() => toggleEmp(e.id)}
                         />
                         <span className="font-mono text-xs w-20">{e.employee_code}</span>
                         <span className="flex-1 text-sm">
                           {e.first_name} {e.last_name}
+                          {ineligible && (
+                            <span className="ml-2 text-xs text-red-500">(แผนกไม่มี OT)</span>
+                          )}
                         </span>
                         {picked && (
                           <input

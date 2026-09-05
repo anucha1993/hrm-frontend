@@ -9,8 +9,9 @@ import {
   ADVANCE_STATUS_COLOR,
   ADVANCE_STATUS_LABEL,
   type EmployeeAdvance,
+  type ProductionEligibility,
 } from "@/lib/advance";
-import { Plus, X, Loader2, AlertCircle, Wallet, Trash2 } from "lucide-react";
+import { Plus, X, Loader2, AlertCircle, Wallet, Trash2, CheckCircle2, XCircle, Target } from "lucide-react";
 
 type Form = {
   amount: string;
@@ -44,6 +45,13 @@ export default function MyAdvancePage() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  const [eligibility, setEligibility] = useState<ProductionEligibility | null>(null);
+  useEffect(() => {
+    apiFetch<{ data: ProductionEligibility }>("/advances/production-status")
+      .then((r) => setEligibility(r.data))
+      .catch(() => {});
   }, []);
 
   function openCreate() {
@@ -97,6 +105,27 @@ export default function MyAdvancePage() {
     <>
       <Topbar title="เบิกเงินล่วงหน้าของฉัน" />
       <div className="p-6 space-y-5">
+        {eligibility && eligibility.rules.length > 0 && (
+          <div className="bg-white rounded-xl border border-border p-4 space-y-1.5">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Target className="w-4 h-4 text-primary-600" /> สถานะเป้าหมายผลิตวันนี้ (เงื่อนไขเบิกผ่านเครื่อง Tiger)
+            </div>
+            {eligibility.rules.map((r) => (
+              <div
+                key={r.rule_id}
+                className={`flex items-center justify-between text-xs rounded-lg px-2.5 py-1.5 ${
+                  r.is_met ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  {r.is_met ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                  {r.name}
+                </span>
+                <span className="font-medium">{r.achieved_qty.toLocaleString()} / {r.target_qty.toLocaleString()} {r.unit}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">ประวัติคำขอเบิกเงินล่วงหน้า</h3>
           <button

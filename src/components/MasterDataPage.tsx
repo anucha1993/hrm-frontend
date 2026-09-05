@@ -73,7 +73,14 @@ export default function MasterDataPage({ title, endpoint, extraFields = [], code
   }
 
   function openEdit(r: MasterRecord) {
-    setForm({ ...r });
+    const initial: Record<string, unknown> = { ...r };
+    // select-type fields ที่ค่าจริงเป็น boolean (เช่น ot_eligible) ต้องแปลงเป็น "1"/"0" ให้ตรงกับ option value ก่อนใส่ใน <select>
+    extraFields.forEach((f) => {
+      if (f.type === "select" && typeof initial[f.key] === "boolean") {
+        initial[f.key] = initial[f.key] ? "1" : "0";
+      }
+    });
+    setForm(initial);
     setError(null);
     setShowModal(true);
   }
@@ -191,7 +198,9 @@ export default function MasterDataPage({ title, endpoint, extraFields = [], code
                             {(() => {
                               const raw = r[f.key];
                               if (f.type === "select" && f.options) {
-                                const found = f.options.find((o) => o.value === raw);
+                                // ค่าจริงบางฟิลด์เป็น boolean (เช่น ot_eligible) แต่ option value เป็น "1"/"0"
+                                const normalized = typeof raw === "boolean" ? (raw ? "1" : "0") : raw;
+                                const found = f.options.find((o) => o.value === normalized);
                                 return found?.label ?? (raw as string) ?? "-";
                               }
                               return (raw as string) ?? "-";

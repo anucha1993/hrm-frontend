@@ -20,6 +20,16 @@ export default function DepartmentsPage() {
             { value: "none", label: "งานเหมา / ไม่บันทึกเวลา" },
           ],
         },
+        {
+          key: "ot_eligible",
+          label: "โอที (OT)",
+          type: "select",
+          defaultValue: "1",
+          options: [
+            { value: "1", label: "อนุญาตให้มี OT" },
+            { value: "0", label: "ไม่มี OT (ทำงานเกินเวลาไม่นับเป็น OT)" },
+          ],
+        },
       ]}
     />
   );

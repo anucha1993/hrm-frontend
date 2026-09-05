@@ -1,7 +1,7 @@
 "use client";
 
 import Topbar from "@/components/Topbar";
-import { Building, Users, Shield, Bell, Database, Globe, Fingerprint } from "lucide-react";
+import { Building, Users, Shield, Bell, Database, Globe, Fingerprint, Banknote } from "lucide-react";
 import Link from "next/link";
 
 const settingSections = [
@@ -18,6 +18,13 @@ const settingSections = [
     icon: Fingerprint,
     color: "bg-teal-50 text-teal-600 border-teal-100",
     href: "/settings/hiptime",
+  },
+  {
+    title: "เบิกเงินผ่านเครื่อง Tiger",
+    description: "ตั้งค่า TigerPay API และเงื่อนไขเป้าหมายผลิตก่อนเบิกเงินล่วงหน้า",
+    icon: Banknote,
+    color: "bg-orange-50 text-orange-600 border-orange-100",
+    href: "/settings/tiger-voucher",
   },
   {
     title: "จัดการผู้ใช้งาน",
