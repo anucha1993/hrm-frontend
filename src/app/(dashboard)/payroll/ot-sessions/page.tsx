@@ -12,7 +12,13 @@ interface Employee {
   first_name: string;
   last_name: string;
   status: string;
+  department_id?: number | null;
   department?: { id: number; name: string; ot_eligible?: boolean } | null;
+}
+
+interface Department {
+  id: number;
+  name: string;
 }
 
 type SessionForm = {
@@ -55,22 +61,28 @@ function emptyForm(): SessionForm {
 export default function OtSessionsPage() {
   const [sessions, setSessions] = useState<OtSession[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<OtSession | null>(null);
   const [form, setForm] = useState<SessionForm>(emptyForm());
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [empSearch, setEmpSearch] = useState("");
+  const [empDept, setEmpDept] = useState("");
+  const [bulkHours, setBulkHours] = useState("1");
 
   async function load() {
     setLoading(true);
     try {
-      const [sr, er] = await Promise.all([
+      const [sr, er, dr] = await Promise.all([
         apiFetch<{ data: { data: OtSession[] } }>("/payroll/ot-sessions?per_page=100"),
         apiFetch<{ data: { data: Employee[] } }>("/employees?per_page=500"),
+        apiFetch<{ data: Department[] | { data: Department[] } }>("/departments"),
       ]);
       setSessions(sr.data.data);
       setEmployees(er.data.data.filter((e) => e.status === "active"));
+      setDepartments(Array.isArray(dr.data) ? dr.data : dr.data.data);
     } finally {
       setLoading(false);
     }
@@ -84,12 +96,16 @@ export default function OtSessionsPage() {
     setEditing(null);
     setForm(emptyForm());
     setErr(null);
+    setEmpSearch("");
+    setEmpDept("");
     setShowForm(true);
   }
 
   function openEdit(s: OtSession) {
     setEditing(s);
     setErr(null);
+    setEmpSearch("");
+    setEmpDept("");
     setForm({
       ot_date: s.ot_date,
       start_time: s.start_time ?? "",
@@ -157,6 +173,31 @@ export default function OtSessionsPage() {
       ...f,
       employees: f.employees.map((x) => (x.employee_id === empId ? { ...x, hours } : x)),
     }));
+  }
+
+  const filteredEmployees = employees.filter((e) => {
+    if (empDept && String(e.department_id ?? e.department?.id ?? "") !== empDept) return false;
+    const q = empSearch.trim().toLowerCase();
+    if (q) {
+      const hay = `${e.employee_code} ${e.first_name} ${e.last_name}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const filteredEligible = filteredEmployees.filter((e) => e.department?.ot_eligible !== false);
+  const allFilteredPicked = filteredEligible.length > 0 && filteredEligible.every((e) => form.employees.some((x) => x.employee_id === e.id));
+
+  function toggleAllFiltered() {
+    setForm((f) => {
+      if (allFilteredPicked) {
+        const ids = new Set(filteredEligible.map((e) => e.id));
+        return { ...f, employees: f.employees.filter((x) => !ids.has(x.employee_id)) };
+      }
+      const existingIds = new Set(f.employees.map((x) => x.employee_id));
+      const toAdd = filteredEligible.filter((e) => !existingIds.has(e.id)).map((e) => ({ employee_id: e.id, hours: bulkHours, note: "" }));
+      return { ...f, employees: [...f.employees, ...toAdd] };
+    });
   }
 
   return (
@@ -350,8 +391,48 @@ export default function OtSessionsPage() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-medium">พนักงานที่ทำ OT ({form.employees.length} คน)</div>
                 </div>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={empSearch}
+                    onChange={(e) => setEmpSearch(e.target.value)}
+                    placeholder="ค้นหารหัส/ชื่อพนักงาน..."
+                    className="payroll-input flex-1 min-w-[180px]"
+                  />
+                  <select
+                    value={empDept}
+                    onChange={(e) => setEmpDept(e.target.value)}
+                    className="payroll-input"
+                    style={{ width: 180 }}
+                  >
+                    <option value="">ทุกแผนก</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number" step="0.25" min="0"
+                      className="payroll-input"
+                      style={{ width: 70 }}
+                      value={bulkHours}
+                      onChange={(e) => setBulkHours(e.target.value)}
+                      title="ชั่วโมง OT ที่จะใช้ตอนเลือกทั้งหมด"
+                    />
+                    <button
+                      type="button"
+                      onClick={toggleAllFiltered}
+                      disabled={filteredEligible.length === 0}
+                      className="px-3 py-2 text-xs rounded-lg border border-border hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {allFilteredPicked ? "ยกเลิกที่กรองไว้ทั้งหมด" : `เลือกที่กรองไว้ทั้งหมด (${filteredEligible.length})`}
+                    </button>
+                  </div>
+                </div>
                 <div className="border border-border rounded-lg max-h-72 overflow-y-auto">
-                  {employees.map((e) => {
+                  {filteredEmployees.length === 0 ? (
+                    <div className="px-3 py-6 text-center text-xs text-muted">ไม่พบพนักงานที่ตรงกับเงื่อนไข</div>
+                  ) : filteredEmployees.map((e) => {
                     const picked = form.employees.find((x) => x.employee_id === e.id);
                     const ineligible = e.department?.ot_eligible === false;
                     return (
@@ -363,11 +444,12 @@ export default function OtSessionsPage() {
                           type="checkbox"
                           checked={!!picked}
                           disabled={ineligible && !picked}
-                          onChange={() => toggleEmp(e.id)}
+                          onChange={() => toggleEmp(e.id, bulkHours)}
                         />
                         <span className="font-mono text-xs w-20">{e.employee_code}</span>
                         <span className="flex-1 text-sm">
                           {e.first_name} {e.last_name}
+                          {e.department?.name && <span className="ml-2 text-xs text-muted">· {e.department.name}</span>}
                           {ineligible && (
                             <span className="ml-2 text-xs text-red-500">(แผนกไม่มี OT)</span>
                           )}

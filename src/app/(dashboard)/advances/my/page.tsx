@@ -11,7 +11,7 @@ import {
   type EmployeeAdvance,
   type ProductionEligibility,
 } from "@/lib/advance";
-import { Plus, X, Loader2, AlertCircle, Wallet, Trash2, CheckCircle2, XCircle, Target } from "lucide-react";
+import { Plus, X, Loader2, AlertCircle, Wallet, Trash2, CheckCircle2, XCircle, Target, Printer } from "lucide-react";
 
 type Form = {
   amount: string;
@@ -180,6 +180,17 @@ export default function MyAdvancePage() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
+                        )}
+                        {r.disbursement_method === "tiger_voucher" && r.tiger_voucher_code && (
+                          <a
+                            href={`/vouchers/${r.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex p-1.5 text-orange-600 hover:text-orange-700"
+                            title="พิมพ์ Voucher"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </a>
                         )}
                       </td>
                     </tr>

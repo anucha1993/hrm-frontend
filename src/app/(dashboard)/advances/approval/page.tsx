@@ -13,7 +13,7 @@ import {
   type EmployeeAdvance,
   type ProductionEligibility,
 } from "@/lib/advance";
-import { Loader2, Check, X, AlertCircle, FileText, Plus, Banknote, MinusCircle, CheckCircle2, XCircle, Ticket } from "lucide-react";
+import { Loader2, Check, X, AlertCircle, FileText, Plus, Banknote, MinusCircle, CheckCircle2, XCircle, Ticket, Printer } from "lucide-react";
 
 type EmployeeBrief = { id: number; employee_code: string; first_name: string; last_name: string };
 
@@ -538,10 +538,18 @@ export default function AdvanceApprovalPage() {
               {detail.disbursement_method === "tiger_voucher" && detail.tiger_voucher_code && (
                 <div className="bg-orange-50 border border-orange-100 rounded-lg p-3 flex items-center gap-2">
                   <Ticket className="w-4 h-4 text-orange-600" />
-                  <div className="text-sm">
+                  <div className="text-sm flex-1">
                     <div className="text-xs text-muted">รหัส Tiger Voucher</div>
                     <div className="font-mono font-semibold">{detail.tiger_voucher_code}</div>
                   </div>
+                  <a
+                    href={`/vouchers/${detail.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 text-white rounded-lg text-xs font-medium hover:bg-orange-700"
+                  >
+                    <Printer className="w-3.5 h-3.5" /> พิมพ์ Voucher
+                  </a>
                 </div>
               )}
               {detail.eligibility_bypassed && (

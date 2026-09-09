@@ -56,6 +56,7 @@ export default function AttendanceManagePage() {
   const [statusFilter, setStatusFilter] = useState<AttendanceRosterRow["day_status"] | "">("");
   const [date, setDate] = useState(todayStr());
   const [importOpen, setImportOpen] = useState(false);
+  const [sortMode, setSortMode] = useState<"default" | "recorded_first" | "unrecorded_first">("recorded_first");
 
   // ===== Manual entry / edit / delete / audit =====
   const [shifts, setShifts] = useState<WorkShift[]>([]);
@@ -127,6 +128,13 @@ export default function AttendanceManagePage() {
   }, [load]);
 
   const filteredRows = statusFilter ? rows.filter((r) => r.day_status === statusFilter) : rows;
+  const sortedRows = sortMode === "default"
+    ? filteredRows
+    : [...filteredRows].sort((a, b) => {
+        const recorded = (r: AttendanceRosterRow) => (r.check_in || r.check_out) ? 1 : 0;
+        const diff = recorded(b) - recorded(a);
+        return sortMode === "recorded_first" ? diff : -diff;
+      });
 
   function openCreate(row?: AttendanceRosterRow, type: "check_in" | "check_out" = "check_in") {
     setForm({
@@ -280,7 +288,7 @@ export default function AttendanceManagePage() {
           <Filter className="w-4 h-4" />
           ตัวกรอง
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 sm:gap-3">
           <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs font-medium text-muted mb-1">พนักงาน</label>
             <EmployeeCombobox
@@ -323,6 +331,18 @@ export default function AttendanceManagePage() {
             </select>
           </div>
           <div>
+            <label className="block text-xs font-medium text-muted mb-1">เรียงตาม</label>
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+            >
+              <option value="default">ค่าเริ่มต้น</option>
+              <option value="recorded_first">มีลงเวลาก่อน</option>
+              <option value="unrecorded_first">ยังไม่ลงเวลาก่อน</option>
+            </select>
+          </div>
+          <div>
             <label className="block text-xs font-medium text-muted mb-1">วันที่</label>
             <input
               type="date"
@@ -358,9 +378,9 @@ export default function AttendanceManagePage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-muted">กำลังโหลด...</td></tr>
-              ) : filteredRows.length === 0 ? (
+              ) : sortedRows.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-muted">ไม่พบข้อมูลพนักงาน</td></tr>
-              ) : filteredRows.map((row) => {
+              ) : sortedRows.map((row) => {
                 const ds = dayStatusInfo(row.day_status);
                 return (
                   <tr key={row.employee.id} className="border-b border-border hover:bg-gray-50">
@@ -451,9 +471,9 @@ export default function AttendanceManagePage() {
         <div className="md:hidden divide-y divide-border">
           {loading ? (
             <div className="px-4 py-8 text-center text-muted">กำลังโหลด...</div>
-          ) : filteredRows.length === 0 ? (
+          ) : sortedRows.length === 0 ? (
             <div className="px-4 py-8 text-center text-muted">ไม่พบข้อมูลพนักงาน</div>
-          ) : filteredRows.map((row) => {
+          ) : sortedRows.map((row) => {
             const ds = dayStatusInfo(row.day_status);
             return (
               <div key={row.employee.id} className="px-4 py-3">

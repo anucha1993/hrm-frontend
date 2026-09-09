@@ -80,11 +80,11 @@ export async function apiFetch<T = unknown>(
   }
 
   if (!res.ok) {
-    const message =
-      data && typeof data === "object" && "message" in data
-        ? (data as { message?: string }).message
-        : undefined;
-    const msg = message || `HTTP ${res.status}`;
+    const body = data && typeof data === "object" ? (data as { message?: string; errors?: Record<string, string[]> }) : undefined;
+    // Laravel validation (422) puts the actually-useful message inside errors.<field>[0] —
+    // the top-level "message" is just a generic "The given data was invalid." otherwise.
+    const firstFieldError = body?.errors ? Object.values(body.errors).find((v) => Array.isArray(v) && v.length > 0)?.[0] : undefined;
+    const msg = firstFieldError || body?.message || `HTTP ${res.status}`;
     throw new ApiError(res.status, msg, data);
   }
 
@@ -119,8 +119,10 @@ export async function apiDownload(
     let message = `HTTP ${res.status}`;
     try {
       const data = await res.json();
-      if (data && typeof data === "object" && "message" in data) {
-        message = String((data as { message?: string }).message ?? message);
+      if (data && typeof data === "object") {
+        const body = data as { message?: string; errors?: Record<string, string[]> };
+        const firstFieldError = body.errors ? Object.values(body.errors).find((v) => Array.isArray(v) && v.length > 0)?.[0] : undefined;
+        message = firstFieldError || body.message || message;
       }
     } catch {
       /* ignore */
