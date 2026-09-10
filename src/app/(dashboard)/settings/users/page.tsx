@@ -27,7 +27,6 @@ const emptyForm: UserForm = {
 };
 
 type RoleTab = "system" | "employee";
-const SYSTEM_ROLES = ["super_admin", "admin", "member"];
 const EMPLOYEE_ROLES = ["employee"];
 
 export default function UsersPage() {
@@ -68,7 +67,11 @@ export default function UsersPage() {
     load();
   }, [load]);
 
-  const tabRoles = tab === "system" ? SYSTEM_ROLES : EMPLOYEE_ROLES;
+  // แท็บ "ระบบ" = ทุกบทบาทยกเว้น employee (ไดนามิกตามบทบาทจริงในระบบ ไม่ฮาร์ดโค้ดชื่อ
+  // กันบทบาทที่เพิ่มใหม่ภายหลัง เช่น HR/Manager/Owner/HrMember/OtMember เลือกไม่ได้)
+  const tabRoles = tab === "system"
+    ? roles.filter((r) => !EMPLOYEE_ROLES.includes(r.name)).map((r) => r.name)
+    : EMPLOYEE_ROLES;
 
   const visibleUsers = useMemo(
     () => users.filter((u) => u.role && tabRoles.includes(u.role.name)),

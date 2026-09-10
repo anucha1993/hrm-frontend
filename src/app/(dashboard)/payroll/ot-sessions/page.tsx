@@ -107,7 +107,7 @@ export default function OtSessionsPage() {
     setEmpSearch("");
     setEmpDept("");
     setForm({
-      ot_date: s.ot_date,
+      ot_date: s.ot_date.slice(0, 10),
       start_time: s.start_time ?? "",
       end_time: s.end_time ?? "",
       ot_type: s.ot_type,
