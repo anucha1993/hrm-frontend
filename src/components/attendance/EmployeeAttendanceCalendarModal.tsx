@@ -110,7 +110,6 @@ export default function EmployeeAttendanceCalendarModal({
   const [bulkCheckOut, setBulkCheckOut] = useState("");
   const [bulkNote, setBulkNote] = useState("");
   const [bulkReason, setBulkReason] = useState("");
-  const [bulkIsOt, setBulkIsOt] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkErr, setBulkErr] = useState<string | null>(null);
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
@@ -121,7 +120,6 @@ export default function EmployeeAttendanceCalendarModal({
   const [checkOut, setCheckOut] = useState("");
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
-  const [isOt, setIsOt] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -232,7 +230,6 @@ export default function EmployeeAttendanceCalendarModal({
     setCheckOut(cell.checkOut ? hm(cell.checkOut.checked_at) : "");
     setNote("");
     setReason("");
-    setIsOt(cell.checkOut?.status === "overtime");
     setErr(null);
     setMsg(null);
   }
@@ -241,7 +238,6 @@ export default function EmployeeAttendanceCalendarModal({
     setMultiMode((m) => !m);
     setSelected(null);
     setSelectedDays(new Set());
-    setBulkIsOt(false);
     setBulkErr(null);
     setBulkMsg(null);
   }
@@ -263,25 +259,25 @@ export default function EmployeeAttendanceCalendarModal({
     const existingOut = selectedCell?.checkOut;
     const outUnchanged = !!existingOut && checkOut === hm(existingOut.checked_at);
     const inUnchanged = !!existingIn && checkIn === hm(existingIn.checked_at);
-    // เวลาออกงานไม่เปลี่ยน แต่ต้องการแก้สถานะ OT/หมายเหตุ -> ต้องแก้ไขรายการเดิม (สร้างใหม่จะถูกข้ามเพราะเวลาซ้ำ)
-    const needsOtUpdate = outUnchanged && !!existingOut && (isOt !== (existingOut.status === "overtime") || note !== (existingOut.note ?? ""));
-    const dayPayload: { date: string; check_in?: string; check_out?: string; note?: string | null; is_ot?: boolean } = { date: selected };
+    // เวลาออกงานไม่เปลี่ยน แต่ต้องการแก้หมายเหตุ -> ต้องแก้ไขรายการเดิม (สร้างใหม่จะถูกข้ามเพราะเวลาซ้ำ)
+    const needsNoteUpdate = outUnchanged && !!existingOut && note !== (existingOut.note ?? "");
+    const dayPayload: { date: string; check_in?: string; check_out?: string; note?: string | null } = { date: selected };
     let hasNewEntry = false;
     if (checkIn && !inUnchanged) { dayPayload.check_in = checkIn; hasNewEntry = true; }
-    if (checkOut && !outUnchanged) { dayPayload.check_out = checkOut; dayPayload.is_ot = isOt; hasNewEntry = true; }
+    if (checkOut && !outUnchanged) { dayPayload.check_out = checkOut; hasNewEntry = true; }
     if (hasNewEntry) dayPayload.note = note || null;
 
-    if (!hasNewEntry && !needsOtUpdate) {
+    if (!hasNewEntry && !needsNoteUpdate) {
       setErr("ไม่มีการเปลี่ยนแปลงที่จะบันทึก (เวลาที่กรอกตรงกับข้อมูลเดิมอยู่แล้ว)");
       return;
     }
 
     setBusy(true);
     try {
-      if (needsOtUpdate && existingOut) {
+      if (needsNoteUpdate && existingOut) {
         await apiFetch(`/attendance/${existingOut.id}`, {
           method: "PATCH",
-          body: { status: isOt ? "overtime" : "normal", note: note || null, reason: reason.trim() },
+          body: { note: note || null, reason: reason.trim() },
         });
       }
       let created = 0;
@@ -297,8 +293,8 @@ export default function EmployeeAttendanceCalendarModal({
         skipped = res.summary.skipped;
       }
       setMsg(
-        needsOtUpdate
-          ? `บันทึกสำเร็จ (อัปเดตสถานะ OT/หมายเหตุของรายการเดิม${hasNewEntry ? ` + สร้าง ${created}, แก้ไข ${updated}, ข้าม ${skipped}` : ""})`
+        needsNoteUpdate
+          ? `บันทึกสำเร็จ (อัปเดตหมายเหตุของรายการเดิม${hasNewEntry ? ` + สร้าง ${created}, แก้ไข ${updated}, ข้าม ${skipped}` : ""})`
           : `บันทึกสำเร็จ (สร้าง ${created}, แก้ไข ${updated}, ข้าม ${skipped})`
       );
       setReason("");
@@ -353,9 +349,7 @@ export default function EmployeeAttendanceCalendarModal({
     if (!bulkReason || bulkReason.trim().length < 5) { setBulkErr("กรุณาระบุเหตุผล อย่างน้อย 5 ตัวอักษร"); return; }
     setBulkBusy(true);
     try {
-      const createDays: { date: string; check_in?: string; check_out?: string; note?: string | null; is_ot?: boolean }[] = [];
-      let otUpdated = 0;
-      let otUpdateFailed = 0;
+      const createDays: { date: string; check_in?: string; check_out?: string; note?: string | null }[] = [];
 
       for (const date of Array.from(selectedDays).sort()) {
         const cell = cells.find((c) => c.date === date);
@@ -364,23 +358,10 @@ export default function EmployeeAttendanceCalendarModal({
         const inUnchanged = !!existingIn && bulkCheckIn === hm(existingIn.checked_at);
         const outUnchanged = !!existingOut && bulkCheckOut === hm(existingOut.checked_at);
 
-        // เวลาออกงานไม่เปลี่ยน แต่ต้องการแก้สถานะ OT -> ต้องแก้ไขรายการเดิม (สร้างใหม่จะถูกข้ามเพราะเวลาซ้ำ)
-        if (outUnchanged && existingOut && bulkIsOt !== (existingOut.status === "overtime")) {
-          try {
-            await apiFetch(`/attendance/${existingOut.id}`, {
-              method: "PATCH",
-              body: { status: bulkIsOt ? "overtime" : "normal", note: bulkNote || null, reason: bulkReason.trim() },
-            });
-            otUpdated++;
-          } catch {
-            otUpdateFailed++;
-          }
-        }
-
-        const day: { date: string; check_in?: string; check_out?: string; note?: string | null; is_ot?: boolean } = { date };
+        const day: { date: string; check_in?: string; check_out?: string; note?: string | null } = { date };
         let hasNewEntry = false;
         if (bulkCheckIn && !inUnchanged) { day.check_in = bulkCheckIn; hasNewEntry = true; }
-        if (bulkCheckOut && !outUnchanged) { day.check_out = bulkCheckOut; day.is_ot = bulkIsOt; hasNewEntry = true; }
+        if (bulkCheckOut && !outUnchanged) { day.check_out = bulkCheckOut; hasNewEntry = true; }
         if (hasNewEntry) { day.note = bulkNote || null; createDays.push(day); }
       }
 
@@ -397,19 +378,13 @@ export default function EmployeeAttendanceCalendarModal({
         skipped = res.summary.skipped;
       }
 
-      if (createDays.length === 0 && otUpdated === 0 && otUpdateFailed === 0) {
+      if (createDays.length === 0) {
         setBulkMsg("ไม่มีการเปลี่ยนแปลงที่จะบันทึก (เวลาที่กรอกตรงกับข้อมูลเดิมของทุกวันที่เลือกอยู่แล้ว)");
       } else {
-        setBulkMsg(
-          `บันทึกสำเร็จ (สร้าง ${created}, แก้ไข ${updated}, ข้าม ${skipped}` +
-          (otUpdated ? `, อัปเดต OT ${otUpdated} วัน` : "") +
-          (otUpdateFailed ? `, อัปเดต OT ล้มเหลว ${otUpdateFailed} วัน` : "") +
-          `) จาก ${selectedDays.size} วันที่เลือก`
-        );
+        setBulkMsg(`บันทึกสำเร็จ (สร้าง ${created}, แก้ไข ${updated}, ข้าม ${skipped}) จาก ${selectedDays.size} วันที่เลือก`);
       }
       setSelectedDays(new Set());
       setBulkReason("");
-      setBulkIsOt(false);
       await load();
       onChanged();
     } catch (e) {
@@ -454,7 +429,7 @@ export default function EmployeeAttendanceCalendarModal({
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
           <div>
             <h3 className="font-semibold">ปฏิทินเวลางาน — {employee.code} {employee.name}</h3>
-            <p className="text-xs text-slate-500">คลิกวันที่เพื่อเพิ่มเวลา / OT / แจ้งวันหยุด — หรือเปิดโหมดเลือกหลายวัน</p>
+            <p className="text-xs text-slate-500">คลิกวันที่เพื่อเพิ่มเวลา / แจ้งวันหยุด — หรือเปิดโหมดเลือกหลายวัน</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
             <X className="w-5 h-5" />
@@ -508,7 +483,6 @@ export default function EmployeeAttendanceCalendarModal({
                 const hasIn = !!c.checkIn;
                 const hasOut = !!c.checkOut;
                 const isLate = c.checkIn?.status === "late";
-                const isOtDay = c.checkOut?.status === "overtime";
                 const isDayOff = !!c.override?.is_day_off;
                 const isFullDayLeave = !!c.leave && !c.leave.is_half_day && c.leave.status === "approved";
                 const isSelected = multiMode ? selectedDays.has(c.date) : selected === c.date;
@@ -548,8 +522,8 @@ export default function EmployeeAttendanceCalendarModal({
                       <div className="mt-1 space-y-0.5">
                         {hasIn && <div className="text-emerald-700 leading-tight">เข้า {hm(c.checkIn!.checked_at)}</div>}
                         {hasOut && (
-                          <div className={`leading-tight ${isOtDay ? "text-violet-700 font-medium" : "text-slate-600"}`}>
-                            ออก {hm(c.checkOut!.checked_at)}{isOtDay ? " (OT)" : ""}
+                          <div className="leading-tight text-slate-600">
+                            ออก {hm(c.checkOut!.checked_at)}
                           </div>
                         )}
                       </div>
@@ -593,10 +567,6 @@ export default function EmployeeAttendanceCalendarModal({
                   <TimeField value={bulkCheckOut} onChange={setBulkCheckOut} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input type="checkbox" checked={bulkIsOt} onChange={(e) => setBulkIsOt(e.target.checked)} className="rounded border-slate-300" />
-                ระบุว่าเป็นวัน OT (ล่วงเวลา) ทุกวันที่เลือก
-              </label>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุ</label>
                 <input type="text" value={bulkNote} onChange={(e) => setBulkNote(e.target.value)} placeholder="(ถ้ามี)" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
@@ -679,13 +649,6 @@ export default function EmployeeAttendanceCalendarModal({
                 </div>
               </div>
               )}
-              {!selectedFullDayLeave && (
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input type="checkbox" checked={isOt} onChange={(e) => setIsOt(e.target.checked)} className="rounded border-slate-300" />
-                ระบุว่าวันนี้เป็นวัน OT (ล่วงเวลา){selectedOverride?.is_day_off ? " — มาทำงานในวันหยุด" : ""}
-              </label>
-              )}
-
               {!selectedFullDayLeave && (
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุ</label>
