@@ -13,6 +13,8 @@ type Form = {
   compensation_profile_id: string;
   base_salary: string;
   hourly_rate_override: string;
+  ssf_manual_amount: string;
+  ssf_manual_split_biweekly: boolean;
   effective_from: string;
   effective_to: string;
   is_active: boolean;
@@ -22,6 +24,8 @@ const empty: Form = {
   compensation_profile_id: "",
   base_salary: "",
   hourly_rate_override: "",
+  ssf_manual_amount: "",
+  ssf_manual_split_biweekly: true,
   effective_from: new Date().toISOString().slice(0, 10),
   effective_to: "",
   is_active: true,
@@ -83,6 +87,8 @@ export default function EmployeeCompensationPage({ params }: { params: Promise<{
       compensation_profile_id: String(c.compensation_profile_id),
       base_salary: c.base_salary,
       hourly_rate_override: c.hourly_rate_override ?? "",
+      ssf_manual_amount: c.ssf_manual_amount ?? "",
+      ssf_manual_split_biweekly: c.ssf_manual_split_biweekly,
       effective_from: c.effective_from.slice(0, 10),
       effective_to: c.effective_to ? c.effective_to.slice(0, 10) : "",
       is_active: c.is_active,
@@ -103,6 +109,8 @@ export default function EmployeeCompensationPage({ params }: { params: Promise<{
           compensation_profile_id: Number(form.compensation_profile_id),
           base_salary: Number(form.base_salary),
           hourly_rate_override: form.hourly_rate_override ? Number(form.hourly_rate_override) : null,
+          ssf_manual_amount: form.ssf_manual_amount ? Number(form.ssf_manual_amount) : null,
+          ssf_manual_split_biweekly: form.ssf_manual_split_biweekly,
           effective_from: form.effective_from,
           effective_to: form.effective_to || null,
           is_active: form.is_active,
@@ -177,6 +185,7 @@ export default function EmployeeCompensationPage({ params }: { params: Promise<{
                   <th className="px-3 py-3">โปรไฟล์ค่าจ้าง</th>
                   <th className="px-3 py-3 text-right">เงินเดือนพื้นฐาน</th>
                   <th className="px-3 py-3 text-right">Rate/ชม. (override)</th>
+                  <th className="px-3 py-3 text-right">หัก SSF/งวด</th>
                   <th className="px-3 py-3">มีผลตั้งแต่</th>
                   <th className="px-3 py-3">มีผลถึง</th>
                   <th className="px-3 py-3">สถานะ</th>
@@ -189,6 +198,11 @@ export default function EmployeeCompensationPage({ params }: { params: Promise<{
                     <td className="px-3 py-3 font-medium">{c.profile?.name ?? `#${c.compensation_profile_id}`}</td>
                     <td className="px-3 py-3 text-right">{Number(c.base_salary).toLocaleString()}</td>
                     <td className="px-3 py-3 text-right text-xs">{c.hourly_rate_override ? Number(c.hourly_rate_override).toLocaleString() : "—"}</td>
+                    <td className="px-3 py-3 text-right text-xs">
+                      {c.ssf_manual_amount
+                        ? `${(Number(c.ssf_manual_amount) / (c.ssf_manual_split_biweekly ? 2 : 1)).toLocaleString()} (กำหนดเอง)`
+                        : "อัตโนมัติ"}
+                    </td>
                     <td className="px-3 py-3 text-xs">{c.effective_from}</td>
                     <td className="px-3 py-3 text-xs">{c.effective_to ?? "ไม่มีกำหนด"}</td>
                     <td className="px-3 py-3 text-xs">
@@ -254,6 +268,36 @@ export default function EmployeeCompensationPage({ params }: { params: Promise<{
                     placeholder="เว้นว่างเพื่อคำนวณอัตโนมัติ"
                   />
                 </Field>
+              </div>
+              <div className="border border-border rounded-lg p-3 space-y-2 bg-gray-50/50">
+                <span className="text-xs font-medium text-muted block">หักประกันสังคม (SSF) — เว้นว่างเพื่อคำนวณอัตโนมัติตามโปรไฟล์</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="ยอดหัก (บาท)">
+                    <input
+                      type="number" step="0.01" min="0"
+                      className="payroll-input"
+                      value={form.ssf_manual_amount}
+                      onChange={(e) => setForm({ ...form, ssf_manual_amount: e.target.value })}
+                      placeholder="เช่น 750"
+                    />
+                  </Field>
+                  <Field label="วิธีหัก">
+                    <select
+                      className="payroll-input"
+                      value={form.ssf_manual_split_biweekly ? "split" : "full"}
+                      onChange={(e) => setForm({ ...form, ssf_manual_split_biweekly: e.target.value === "split" })}
+                    >
+                      <option value="split">ยอดรวม/เดือน (หารครึ่งต่องวด)</option>
+                      <option value="full">เต็มจำนวนทุกงวด</option>
+                    </select>
+                  </Field>
+                </div>
+                {form.ssf_manual_amount && (
+                  <p className="text-xs text-muted">
+                    หักต่องวด ={" "}
+                    {(Number(form.ssf_manual_amount) / (form.ssf_manual_split_biweekly ? 2 : 1)).toLocaleString()} บาท
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="มีผลตั้งแต่ *">

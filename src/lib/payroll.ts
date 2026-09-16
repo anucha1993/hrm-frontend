@@ -233,6 +233,8 @@ export interface EmployeeCompensation {
   compensation_profile_id: number;
   base_salary: string;
   hourly_rate_override?: string | null;
+  ssf_manual_amount?: string | null;
+  ssf_manual_split_biweekly: boolean;
   effective_from: string;
   effective_to?: string | null;
   is_active: boolean;
