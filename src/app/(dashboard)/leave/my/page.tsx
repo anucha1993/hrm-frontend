@@ -43,7 +43,7 @@ const empty: Form = {
 
 export default function MyLeavePage() {
   const { hasPermission } = useAuth();
-  const canFileForOthers = hasPermission("leave.config");
+  const canFileForOthers = hasPermission("leave.config") || hasPermission("leave.create_for_others");
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);

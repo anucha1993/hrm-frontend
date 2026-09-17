@@ -79,9 +79,9 @@ const menuItems: MenuItem[] = [
     label: "การลา",
     href: "/leave/my",
     icon: CalendarOff,
-    permission: ["leave.request", "leave.approve", "leave.config"],
+    permission: ["leave.request", "leave.approve", "leave.config", "leave.create_for_others"],
     children: [
-      { label: "ใบลาของฉัน", href: "/leave/my", permission: "leave.request" },
+      { label: "ใบลาของฉัน", href: "/leave/my", permission: ["leave.request", "leave.create_for_others"] },
       { label: "อนุมัติใบลา", href: "/leave/approval", permission: "leave.approve" },
       { label: "ประเภทการลา", href: "/leave/types", permission: "leave.config" },
     ],
