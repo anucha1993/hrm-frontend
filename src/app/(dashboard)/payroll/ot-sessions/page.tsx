@@ -11,6 +11,7 @@ interface Employee {
   employee_code: string;
   first_name: string;
   last_name: string;
+  nickname?: string | null;
   status: string;
   department_id?: number | null;
   department?: { id: number; name: string; ot_eligible?: boolean } | null;
@@ -179,7 +180,7 @@ export default function OtSessionsPage() {
     if (empDept && String(e.department_id ?? e.department?.id ?? "") !== empDept) return false;
     const q = empSearch.trim().toLowerCase();
     if (q) {
-      const hay = `${e.employee_code} ${e.first_name} ${e.last_name}`.toLowerCase();
+      const hay = `${e.employee_code} ${e.first_name} ${e.last_name} ${e.nickname ?? ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -449,6 +450,7 @@ export default function OtSessionsPage() {
                         <span className="font-mono text-xs w-20">{e.employee_code}</span>
                         <span className="flex-1 text-sm">
                           {e.first_name} {e.last_name}
+                          {e.nickname && <span className="text-muted"> ({e.nickname})</span>}
                           {e.department?.name && <span className="ml-2 text-xs text-muted">· {e.department.name}</span>}
                           {ineligible && (
                             <span className="ml-2 text-xs text-red-500">(แผนกไม่มี OT)</span>
