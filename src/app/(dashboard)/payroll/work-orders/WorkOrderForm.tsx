@@ -420,6 +420,9 @@ export default function WorkOrderForm({
         note: form.note || null,
         status: form.status,
         items: form.items.map((it) => ({
+          // ส่ง id เดิมกลับไปด้วย (ถ้ามี) เพื่อให้ backend อัปเดตแถวเดิมแทนลบ-สร้างใหม่
+          // ไม่งั้นบันทึกผลรายวันที่ผูกกับ item เดิมจะหายหมดทุกครั้งที่กดบันทึกหน้านี้
+          ...(it.id ? { id: it.id } : {}),
           production_rate_item_id: it.production_rate_item_id,
           target_qty: Number(it.target_qty || 0),
           rate_at_target_override: it.rate_at_target_override === "" ? null : Number(it.rate_at_target_override),
