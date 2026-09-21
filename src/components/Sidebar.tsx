@@ -21,6 +21,7 @@ import {
   Receipt,
   HandCoins,
   BookOpen,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -140,6 +141,16 @@ const menuItems: MenuItem[] = [
     href: "/goods-deposits",
     icon: Receipt,
     permission: "goods_deposits.view",
+  },
+  {
+    label: "ค่าไฟ/หอพัก",
+    href: "/electricity/bills",
+    icon: Zap,
+    permission: "dorm.view",
+    children: [
+      { label: "ห้องพัก", href: "/electricity/rooms", permission: "dorm.view" },
+      { label: "ใบค่าไฟ", href: "/electricity/bills", permission: "dorm.view" },
+    ],
   },
   {
     label: "รายงาน",

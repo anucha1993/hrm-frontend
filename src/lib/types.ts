@@ -468,4 +468,69 @@ export type GoodsDepositSlip = {
   creator?: { id: number; name: string } | null;
 };
 
+/* ===================== ค่าไฟ/หอพัก (Dorm & Electricity Bills) ===================== */
+export type DormRoom = {
+  id: number;
+  room_no: string;
+  employee_id: number | null;
+  rent_amount: string;
+  last_meter_reading: string;
+  is_active: boolean;
+  note?: string | null;
+  employee?: { id: number; employee_code: string; first_name: string; last_name: string } | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type ElectricityBillStatus = "draft" | "finalized";
+export type ElectricityInstallmentStatus = "pending" | "deducted" | "cancelled" | "waived";
+
+export type ElectricityBillInstallment = {
+  id: number;
+  electricity_bill_item_id: number;
+  employee_id: number;
+  installment_no: number;
+  due_date: string;
+  amount: string;
+  status: ElectricityInstallmentStatus;
+  payroll_period_id: number | null;
+  payslip_id: number | null;
+  deducted_at: string | null;
+};
+
+export type ElectricityBillItem = {
+  id: number;
+  electricity_bill_id: number;
+  dorm_room_id: number;
+  employee_id: number | null;
+  meter_start: string;
+  meter_end: string | null;
+  units_used: string;
+  rate_per_unit: string;
+  electricity_amount: string;
+  room_rent: string;
+  total_amount: string;
+  note?: string | null;
+  order: number;
+  room?: DormRoom;
+  employee?: { id: number; employee_code: string; first_name: string; last_name: string } | null;
+  installments?: ElectricityBillInstallment[];
+};
+
+export type ElectricityBill = {
+  id: number;
+  code: string;
+  bill_month: string;
+  rate_per_unit: string;
+  status: ElectricityBillStatus;
+  note?: string | null;
+  created_by: number | null;
+  finalized_at: string | null;
+  items_count?: number;
+  items?: ElectricityBillItem[];
+  creator?: { id: number; name: string } | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 
