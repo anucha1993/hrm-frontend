@@ -8,7 +8,7 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { fmtMoney } from "@/lib/payroll";
 import {
   Plus, Trash2, Loader2, AlertCircle, ArrowLeft, Save, Users, Crown,
-  Pencil, RotateCcw, CalendarRange, Coins, CheckCircle2,
+  Pencil, RotateCcw, CalendarRange, Coins, CheckCircle2, Printer,
 } from "lucide-react";
 
 type RateItem = {
@@ -148,12 +148,14 @@ export default function WorkOrderForm({
   linkedWorkOrders,
   batchTotalAmount,
   onBatchChanged,
+  onPrintSummary,
 }: {
   initial: WorkOrderFormInit;
   isEdit?: boolean;
   linkedWorkOrders?: LinkedWorkOrderBrief[];
   batchTotalAmount?: number;
   onBatchChanged?: () => void;
+  onPrintSummary?: () => void;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<WorkOrderFormInit>({ ...initial, extras: initial.extras ?? [] });
@@ -1068,6 +1070,12 @@ export default function WorkOrderForm({
               )}
             </div>
             <div className="flex gap-2">
+              {isEdit && form.status === "completed" && onPrintSummary && (
+                <button type="button" onClick={onPrintSummary}
+                  className="px-4 py-2 text-sm rounded-lg bg-white border border-primary-300 text-primary-700 hover:bg-primary-50 inline-flex items-center gap-2">
+                  <Printer className="w-4 h-4" /> พิมพ์ใบจ่ายงาน (ยอดรวม)
+                </button>
+              )}
               <Link href="/payroll/work-orders" className="px-4 py-2 text-sm rounded-lg border border-border">ยกเลิก</Link>
               <button type="submit" disabled={saving}
                 className="px-4 py-2 text-sm rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-2">

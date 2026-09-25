@@ -65,6 +65,7 @@ export default function EditWorkOrderPage() {
   const [data, setData] = useState<WorkOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"detail" | "daily">("detail");
+  const [printSummary, setPrintSummary] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -145,9 +146,14 @@ export default function EditWorkOrderPage() {
           linkedWorkOrders={data.linked_work_orders}
           batchTotalAmount={data.batch_total_amount}
           onBatchChanged={load}
+          onPrintSummary={() => setPrintSummary(true)}
         />
       ) : (
         <DailyEntriesTab data={data} onChanged={load} />
+      )}
+
+      {printSummary && data.status === "completed" && (
+        <PrintSummaryModal wo={data} onClose={() => setPrintSummary(false)} />
       )}
     </div>
   );
@@ -551,6 +557,206 @@ function PrintDailyOrderModal({ wo, entry, onClose }: { wo: WorkOrderDetail; ent
               </table>
             </>
           )}
+
+          {/* ผู้รับงาน */}
+          <div className="font-semibold mb-1">ผู้รับงาน (สมาชิกทีม)</div>
+          <table className="w-full border border-gray-700 mb-6">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="border border-gray-700 px-2 py-1 w-10">#</th>
+                <th className="border border-gray-700 px-2 py-1 w-28">รหัส</th>
+                <th className="border border-gray-700 px-2 py-1 text-left">ชื่อ-นามสกุล</th>
+                <th className="border border-gray-700 px-2 py-1 w-32">บทบาท</th>
+                <th className="border border-gray-700 px-2 py-1 w-48">ลงชื่อรับงาน</th>
+              </tr>
+            </thead>
+            <tbody>
+              {wo.members.length === 0 ? (
+                <tr><td colSpan={5} className="border border-gray-700 px-2 py-3 text-center text-gray-500">— ไม่มีสมาชิก —</td></tr>
+              ) : (
+                wo.members.map((m, idx) => (
+                  <tr key={m.id}>
+                    <td className="border border-gray-700 px-2 py-2 text-center">{idx + 1}</td>
+                    <td className="border border-gray-700 px-2 py-2">{m.employee?.employee_code ?? "-"}</td>
+                    <td className="border border-gray-700 px-2 py-2">
+                      {m.employee ? `${m.employee.first_name} ${m.employee.last_name}` : "-"}
+                    </td>
+                    <td className="border border-gray-700 px-2 py-2">{roleLabel[m.role ?? ""] ?? (m.role || "-")}</td>
+                    <td className="border border-gray-700 px-2 py-2"></td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          {/* ลายเซ็น */}
+          <div className="grid grid-cols-3 gap-8 mt-12">
+            <div className="text-center">
+              <div className="border-t border-gray-700 pt-1">ผู้จ่ายงาน</div>
+              <div className="text-xs text-gray-600 mt-1">วันที่ ........./........./.........</div>
+            </div>
+            <div className="text-center">
+              <div className="border-t border-gray-700 pt-1">หัวหน้าทีม</div>
+              <div className="text-xs text-gray-600 mt-1">({leaderName})</div>
+            </div>
+            <div className="text-center">
+              <div className="border-t border-gray-700 pt-1">ผู้ตรวจสอบ</div>
+              <div className="text-xs text-gray-600 mt-1">วันที่ ........./........./.........</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Print Summary Modal (ยอดรวมทั้งใบงาน) ----------------
+
+function PrintSummaryModal({ wo, onClose }: { wo: WorkOrderDetail; onClose: () => void }) {
+  const periodLabel: Record<string, string> = {
+    daily: "รายวัน",
+    biweekly_1: "ตัดวิก 6-20 (จ่าย 26)",
+    biweekly_2: "ตัดวิก 21-5 (จ่าย 11)",
+    monthly: "รายเดือน",
+    custom: "กำหนดเอง",
+  };
+  const roleLabel: Record<string, string> = {
+    caster: "คนเท",
+    lifter: "คนยก",
+    helper: "ผู้ช่วย",
+  };
+  const leaderName = wo.team_leader
+    ? `${wo.team_leader.first_name} ${wo.team_leader.last_name}`.trim()
+    : "—";
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-6">
+      <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl">
+        {/* Toolbar (hidden on print) */}
+        <div className="no-print flex items-center justify-between px-4 py-3 border-b border-border">
+          <div className="font-semibold text-sm">ตัวอย่างใบจ่ายงาน (ยอดรวม)</div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => window.print()}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm">
+              <Printer className="w-4 h-4" /> พิมพ์
+            </button>
+            <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-gray-800">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Printable area */}
+        <div className="print-area p-8 text-[13px] text-gray-900">
+          <div className="text-center mb-4">
+            <div className="text-xl font-bold">ใบจ่ายงาน {wo.code}</div>
+            <div className="text-sm text-gray-600">Work Order Payment Summary</div>
+          </div>
+
+          <table className="w-full mb-4">
+            <tbody>
+              <tr>
+                <td className="py-1 w-32 text-gray-600">เลขที่ใบงาน</td>
+                <td className="py-1 font-semibold">{wo.code}</td>
+                <td className="py-1 w-28 text-gray-600">บันทึกแล้ว</td>
+                <td className="py-1 font-semibold">{wo.daily_entries.length} วัน</td>
+              </tr>
+              <tr>
+                <td className="py-1 text-gray-600">ช่วงงาน</td>
+                <td className="py-1">{fmtDate(wo.start_date)} → {fmtDate(wo.end_date)}</td>
+                <td className="py-1 text-gray-600">รอบจ่าย</td>
+                <td className="py-1">{periodLabel[wo.period_type] ?? wo.period_type}</td>
+              </tr>
+              <tr>
+                <td className="py-1 text-gray-600">หัวหน้าทีม</td>
+                <td className="py-1 font-semibold">{leaderName}</td>
+                <td className="py-1 text-gray-600">สถานที่</td>
+                <td className="py-1">{wo.location_name ?? "—"}</td>
+              </tr>
+              {wo.note && (
+                <tr>
+                  <td className="py-1 text-gray-600 align-top">หมายเหตุ</td>
+                  <td className="py-1" colSpan={3}>{wo.note}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          {/* รายการงาน */}
+          <div className="font-semibold mb-1">รายการงานที่สั่งทำ (ยอดรวมทั้งใบงาน)</div>
+          <table className="w-full border border-gray-700 mb-4">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="border border-gray-700 px-2 py-1 w-10">#</th>
+                <th className="border border-gray-700 px-2 py-1 text-left">รายการผลิต</th>
+                <th className="border border-gray-700 px-2 py-1 w-16">หน่วย</th>
+                <th className="border border-gray-700 px-2 py-1 w-20">เป้ารวม</th>
+                <th className="border border-gray-700 px-2 py-1 w-20">สั่งรวม</th>
+                <th className="border border-gray-700 px-2 py-1 w-20">ผลิตจริงรวม</th>
+                <th className="border border-gray-700 px-2 py-1 w-24">อัตรา/หน่วย</th>
+                <th className="border border-gray-700 px-2 py-1 w-28">รวมเงิน</th>
+              </tr>
+            </thead>
+            <tbody>
+              {wo.items.map((it, idx) => {
+                const assignedTotal = wo.daily_entries
+                  .flatMap((e) => e.items)
+                  .filter((ei) => ei.work_order_item_id === it.id)
+                  .reduce((s, ei) => s + Number(ei.assigned_qty ?? 0), 0);
+                return (
+                  <tr key={it.id}>
+                    <td className="border border-gray-700 px-2 py-1 text-center">{idx + 1}</td>
+                    <td className="border border-gray-700 px-2 py-1">{it.rate_item?.name ?? "—"}</td>
+                    <td className="border border-gray-700 px-2 py-1 text-center">{it.rate_item?.unit ?? "-"}</td>
+                    <td className="border border-gray-700 px-2 py-1 text-right">{Number(it.target_qty)}</td>
+                    <td className="border border-gray-700 px-2 py-1 text-right">{assignedTotal > 0 ? assignedTotal : ""}</td>
+                    <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{Number(it.actual_qty_total)}</td>
+                    <td className="border border-gray-700 px-2 py-1 text-right">{fmtMoney(it.rate_used)}</td>
+                    <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{fmtMoney(it.total_amount)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* รายการจ่าย-หักเพิ่มเติม */}
+          {wo.extra_items && wo.extra_items.length > 0 && (
+            <>
+              <div className="font-semibold mb-1">รายการจ่าย-หักเพิ่มเติม</div>
+              <table className="w-full border border-gray-700 mb-4">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="border border-gray-700 px-2 py-1 w-10">#</th>
+                    <th className="border border-gray-700 px-2 py-1 text-left">รายการ</th>
+                    <th className="border border-gray-700 px-2 py-1 w-20">หน่วย</th>
+                    <th className="border border-gray-700 px-2 py-1 w-24">จำนวน</th>
+                    <th className="border border-gray-700 px-2 py-1 w-28">ราคา/หน่วย</th>
+                    <th className="border border-gray-700 px-2 py-1 w-28">รวมเงิน</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {wo.extra_items.map((ex, idx) => (
+                    <tr key={ex.id}>
+                      <td className="border border-gray-700 px-2 py-1 text-center">{idx + 1}</td>
+                      <td className="border border-gray-700 px-2 py-1">{ex.name}</td>
+                      <td className="border border-gray-700 px-2 py-1 text-center">{ex.unit ?? "-"}</td>
+                      <td className="border border-gray-700 px-2 py-1 text-right">{Number(ex.qty)}</td>
+                      <td className="border border-gray-700 px-2 py-1 text-right">{fmtMoney(ex.rate)}</td>
+                      <td className={`border border-gray-700 px-2 py-1 text-right font-semibold ${Number(ex.amount) < 0 ? "text-red-600" : ""}`}>{fmtMoney(ex.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {/* ยอดรวมทั้งสิ้น */}
+          <div className="flex justify-end mb-6">
+            <div className="w-72 flex justify-between border-t-2 border-gray-700 pt-2">
+              <span className="font-semibold">ยอดรวมทั้งสิ้น</span>
+              <span className="font-bold text-lg">{fmtMoney(wo.total_amount)} บาท</span>
+            </div>
+          </div>
 
           {/* ผู้รับงาน */}
           <div className="font-semibold mb-1">ผู้รับงาน (สมาชิกทีม)</div>
