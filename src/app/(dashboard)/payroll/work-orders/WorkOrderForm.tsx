@@ -6,6 +6,7 @@ import Link from "next/link";
 import Topbar from "@/components/Topbar";
 import { apiFetch, ApiError } from "@/lib/api";
 import { fmtMoney } from "@/lib/payroll";
+import { useAuth } from "@/lib/auth-context";
 import {
   Plus, Trash2, Loader2, AlertCircle, ArrowLeft, Save, Users, Crown,
   Pencil, RotateCcw, CalendarRange, Coins, CheckCircle2, Printer,
@@ -158,6 +159,8 @@ export default function WorkOrderForm({
   onPrintSummary?: () => void;
 }) {
   const router = useRouter();
+  const { hasPermission } = useAuth();
+  const canViewMoney = hasPermission(["payroll.view", "payroll.config"]);
   const [form, setForm] = useState<WorkOrderFormInit>({ ...initial, extras: initial.extras ?? [] });
   const [rateItems, setRateItems] = useState<RateItem[]>([]);
   const [employees, setEmployees] = useState<EmployeeBrief[]>([]);
@@ -727,11 +730,13 @@ export default function WorkOrderForm({
                   <th className="px-3 py-2 w-10">#</th>
                   <th className="px-3 py-2">รายการผลิต</th>
                   <th className="px-3 py-2">ประเภท</th>
-                  <th className="px-3 py-2 text-right w-64">เรทที่ตั้งไว้ <span className="text-muted normal-case font-normal">(ปรับได้)</span></th>
+                  {canViewMoney && (
+                    <th className="px-3 py-2 text-right w-64">เรทที่ตั้งไว้ <span className="text-muted normal-case font-normal">(ปรับได้)</span></th>
+                  )}
                   <th className="px-3 py-2 text-right w-28">ต้องผลิต (เป้า)</th>
                   {isEdit && <th className="px-3 py-2 text-right w-28">ผลิตจริง</th>}
-                  {isEdit && <th className="px-3 py-2 text-right w-28">เรทที่ใช้</th>}
-                  {isEdit && <th className="px-3 py-2 text-right w-32">ค่าจ้าง</th>}
+                  {isEdit && canViewMoney && <th className="px-3 py-2 text-right w-28">เรทที่ใช้</th>}
+                  {isEdit && canViewMoney && <th className="px-3 py-2 text-right w-32">ค่าจ้าง</th>}
                   <th className="px-3 py-2 w-12"></th>
                 </tr>
               </thead>
@@ -775,6 +780,7 @@ export default function WorkOrderForm({
                           </>
                         ) : "—"}
                       </td>
+                      {canViewMoney && (
                       <td className="px-3 py-2 text-right text-xs">
                         {!rate ? "—" : (() => {
                           const defaultHigh = Number(rate.rate_at_target);
@@ -852,6 +858,7 @@ export default function WorkOrderForm({
                           );
                         })()}
                       </td>
+                      )}
                       <td className="px-3 py-2">
                         <input type="number" step="0.01" min="0" required disabled={readOnly}
                           className="payroll-input text-right"
@@ -865,10 +872,10 @@ export default function WorkOrderForm({
                           </span>
                         </td>
                       )}
-                      {isEdit && (
+                      {isEdit && canViewMoney && (
                         <td className="px-3 py-2 text-right text-xs">{fmtMoney(prev.rateUsed)}</td>
                       )}
-                      {isEdit && (
+                      {isEdit && canViewMoney && (
                         <td className="px-3 py-2 text-right font-bold text-green-700">{fmtMoney(prev.total)}</td>
                       )}
                       <td className="px-3 py-2 text-right">
@@ -884,7 +891,7 @@ export default function WorkOrderForm({
               </tbody>
             </table>
           )}
-          {isEdit && form.items.length > 0 && (
+          {isEdit && canViewMoney && form.items.length > 0 && (
             <div className="px-4 py-3 border-t border-border bg-green-50/50 flex justify-between items-center">
               <span className="text-sm font-medium">รวมค่าจ้างจากรายการผลิต</span>
               <span className="text-lg font-bold text-green-700">{fmtMoney(grandTotal)} บาท</span>
@@ -899,9 +906,11 @@ export default function WorkOrderForm({
               <Coins className="w-4 h-4 text-amber-600" /> รายการจ่าย-หักเพิ่มเติม ({(form.extras ?? []).length} รายการ)
             </h3>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-muted">
-                รวม: <span className="font-bold text-amber-700">{fmtMoney(extrasTotal)}</span>
-              </span>
+              {canViewMoney && (
+                <span className="text-xs text-muted">
+                  รวม: <span className="font-bold text-amber-700">{fmtMoney(extrasTotal)}</span>
+                </span>
+              )}
               {!readOnly && (
                 <button type="button" onClick={addExtra}
                   className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border hover:bg-gray-50">
@@ -920,8 +929,12 @@ export default function WorkOrderForm({
                   <th className="px-3 py-2">รายการ *</th>
                   <th className="px-3 py-2 w-24">หน่วย</th>
                   <th className="px-3 py-2 w-24 text-right">จำนวน *</th>
-                  <th className="px-3 py-2 w-28 text-right">ราคา/หน่วย *</th>
-                  <th className="px-3 py-2 w-32 text-right">รวมเงิน</th>
+                  {canViewMoney && (
+                    <>
+                      <th className="px-3 py-2 w-28 text-right">ราคา/หน่วย *</th>
+                      <th className="px-3 py-2 w-32 text-right">รวมเงิน</th>
+                    </>
+                  )}
                   <th className="px-3 py-2">หมายเหตุ</th>
                   <th className="px-3 py-2 w-12"></th>
                 </tr>
@@ -946,13 +959,17 @@ export default function WorkOrderForm({
                         <input type="number" step="0.01" min="0" disabled={readOnly} className="payroll-input text-right"
                           value={e.qty} onChange={(ev) => updateExtra(idx, { qty: ev.target.value })} />
                       </td>
-                      <td className="px-3 py-2">
-                        <input type="number" step="0.01" disabled={readOnly} className="payroll-input text-right"
-                          value={e.rate} onChange={(ev) => updateExtra(idx, { rate: ev.target.value })} />
-                      </td>
-                      <td className={`px-3 py-2 text-right font-semibold tabular-nums ${lineAmount < 0 ? "text-red-600" : "text-amber-700"}`}>
-                        {fmtMoney(lineAmount)}
-                      </td>
+                      {canViewMoney && (
+                        <>
+                          <td className="px-3 py-2">
+                            <input type="number" step="0.01" disabled={readOnly} className="payroll-input text-right"
+                              value={e.rate} onChange={(ev) => updateExtra(idx, { rate: ev.target.value })} />
+                          </td>
+                          <td className={`px-3 py-2 text-right font-semibold tabular-nums ${lineAmount < 0 ? "text-red-600" : "text-amber-700"}`}>
+                            {fmtMoney(lineAmount)}
+                          </td>
+                        </>
+                      )}
                       <td className="px-3 py-2">
                         <input type="text" disabled={readOnly} className="payroll-input"
                           value={e.note} onChange={(ev) => updateExtra(idx, { note: ev.target.value })} />
@@ -1040,7 +1057,7 @@ export default function WorkOrderForm({
           )}
         </div>
 
-        {isEdit && (form.items.length > 0 || (form.extras ?? []).length > 0) && (
+        {isEdit && canViewMoney && (form.items.length > 0 || (form.extras ?? []).length > 0) && (
           <div className="bg-gradient-to-r from-green-50 to-amber-50 rounded-xl border-2 border-green-200 px-4 py-3 flex justify-between items-center">
             <span className="text-sm font-semibold">รวมค่าจ้างทั้งใบ (จ่ายหัวหน้าทีม)</span>
             <span className="text-xl font-bold text-green-700">{fmtMoney(grandTotal + extrasTotal)} บาท</span>

@@ -7,6 +7,7 @@ import { Loader2, Plus, Trash2, Save, AlertCircle, Calendar, Pencil, Printer, X 
 import Topbar from "@/components/Topbar";
 import { apiFetch, ApiError } from "@/lib/api";
 import { fmtMoney, fmtDate } from "@/lib/payroll";
+import { useAuth } from "@/lib/auth-context";
 import WorkOrderForm, { type WorkOrderFormInit, type ItemRow, type MemberRow, type ExtraRow, type LinkedWorkOrderBrief } from "../WorkOrderForm";
 
 type RateItemBrief = { id: number; code: string; name: string; unit: string; work_type: string };
@@ -62,6 +63,8 @@ type WorkOrderDetail = {
 export default function EditWorkOrderPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const { hasPermission } = useAuth();
+  const canViewMoney = hasPermission(["payroll.view", "payroll.config"]);
   const [data, setData] = useState<WorkOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"detail" | "daily">("detail");
@@ -153,7 +156,7 @@ export default function EditWorkOrderPage() {
       )}
 
       {printSummary && data.status === "completed" && (
-        <PrintSummaryModal wo={data} onClose={() => setPrintSummary(false)} />
+        <PrintSummaryModal wo={data} canViewMoney={canViewMoney} onClose={() => setPrintSummary(false)} />
       )}
     </div>
   );
@@ -612,7 +615,7 @@ function PrintDailyOrderModal({ wo, entry, onClose }: { wo: WorkOrderDetail; ent
 
 // ---------------- Print Summary Modal (ยอดรวมทั้งใบงาน) ----------------
 
-function PrintSummaryModal({ wo, onClose }: { wo: WorkOrderDetail; onClose: () => void }) {
+function PrintSummaryModal({ wo, canViewMoney, onClose }: { wo: WorkOrderDetail; canViewMoney: boolean; onClose: () => void }) {
   const periodLabel: Record<string, string> = {
     daily: "รายวัน",
     biweekly_1: "ตัดวิก 6-20 (จ่าย 26)",
@@ -693,8 +696,12 @@ function PrintSummaryModal({ wo, onClose }: { wo: WorkOrderDetail; onClose: () =
                 <th className="border border-gray-700 px-2 py-1 w-20">เป้ารวม</th>
                 <th className="border border-gray-700 px-2 py-1 w-20">สั่งรวม</th>
                 <th className="border border-gray-700 px-2 py-1 w-20">ผลิตจริงรวม</th>
-                <th className="border border-gray-700 px-2 py-1 w-24">อัตรา/หน่วย</th>
-                <th className="border border-gray-700 px-2 py-1 w-28">รวมเงิน</th>
+                {canViewMoney && (
+                  <>
+                    <th className="border border-gray-700 px-2 py-1 w-24">อัตรา/หน่วย</th>
+                    <th className="border border-gray-700 px-2 py-1 w-28">รวมเงิน</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -711,8 +718,12 @@ function PrintSummaryModal({ wo, onClose }: { wo: WorkOrderDetail; onClose: () =
                     <td className="border border-gray-700 px-2 py-1 text-right">{Number(it.target_qty)}</td>
                     <td className="border border-gray-700 px-2 py-1 text-right">{assignedTotal > 0 ? assignedTotal : ""}</td>
                     <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{Number(it.actual_qty_total)}</td>
-                    <td className="border border-gray-700 px-2 py-1 text-right">{fmtMoney(it.rate_used)}</td>
-                    <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{fmtMoney(it.total_amount)}</td>
+                    {canViewMoney && (
+                      <>
+                        <td className="border border-gray-700 px-2 py-1 text-right">{fmtMoney(it.rate_used)}</td>
+                        <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{fmtMoney(it.total_amount)}</td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
@@ -720,7 +731,7 @@ function PrintSummaryModal({ wo, onClose }: { wo: WorkOrderDetail; onClose: () =
           </table>
 
           {/* รายการจ่าย-หักเพิ่มเติม */}
-          {wo.extra_items && wo.extra_items.length > 0 && (
+          {canViewMoney && wo.extra_items && wo.extra_items.length > 0 && (
             <>
               <div className="font-semibold mb-1">รายการจ่าย-หักเพิ่มเติม</div>
               <table className="w-full border border-gray-700 mb-4">
@@ -751,12 +762,14 @@ function PrintSummaryModal({ wo, onClose }: { wo: WorkOrderDetail; onClose: () =
           )}
 
           {/* ยอดรวมทั้งสิ้น */}
-          <div className="flex justify-end mb-6">
-            <div className="w-72 flex justify-between border-t-2 border-gray-700 pt-2">
-              <span className="font-semibold">ยอดรวมทั้งสิ้น</span>
-              <span className="font-bold text-lg">{fmtMoney(wo.total_amount)} บาท</span>
+          {canViewMoney && (
+            <div className="flex justify-end mb-6">
+              <div className="w-72 flex justify-between border-t-2 border-gray-700 pt-2">
+                <span className="font-semibold">ยอดรวมทั้งสิ้น</span>
+                <span className="font-bold text-lg">{fmtMoney(wo.total_amount)} บาท</span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* ผู้รับงาน */}
           <div className="font-semibold mb-1">ผู้รับงาน (สมาชิกทีม)</div>
