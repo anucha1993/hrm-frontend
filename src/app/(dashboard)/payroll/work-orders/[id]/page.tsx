@@ -443,8 +443,8 @@ function PrintDailyOrderModal({ wo, entry, onClose }: { wo: WorkOrderDetail; ent
     : "—";
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-6">
-      <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-6 print:static print:bg-white print:overflow-visible print:py-0">
+      <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl print:shadow-none print:max-w-none">
         {/* Toolbar (hidden on print) */}
         <div className="no-print flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="font-semibold text-sm">ตัวอย่างใบจ่ายงานประจำวัน</div>
@@ -630,8 +630,8 @@ function PrintSummaryModal({ wo, onClose }: { wo: WorkOrderDetail; onClose: () =
     : "—";
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-6">
-      <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-6 print:static print:bg-white print:overflow-visible print:py-0">
+      <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl print:shadow-none print:max-w-none">
         {/* Toolbar (hidden on print) */}
         <div className="no-print flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="font-semibold text-sm">ตัวอย่างใบจ่ายงาน (ยอดรวม)</div>
