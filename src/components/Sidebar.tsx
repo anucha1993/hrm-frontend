@@ -22,6 +22,7 @@ import {
   HandCoins,
   BookOpen,
   Zap,
+  Percent,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -141,6 +142,12 @@ const menuItems: MenuItem[] = [
     href: "/goods-deposits",
     icon: Receipt,
     permission: "goods_deposits.view",
+  },
+  {
+    label: "ค่าคอมมิชชั่น",
+    href: "/commissions",
+    icon: Percent,
+    permission: "commission.view",
   },
   {
     label: "ค่าไฟ/หอพัก",

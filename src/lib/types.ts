@@ -533,4 +533,28 @@ export type ElectricityBill = {
   updated_at?: string;
 };
 
+/* ===================== ค่าคอมมิชชั่นลอย ๆ (Commission) ===================== */
+export type CommissionStatus = "pending" | "paid" | "cancelled";
+
+export type Commission = {
+  id: number;
+  code: string;
+  employee_id: number;
+  earned_date: string;
+  amount: string;
+  title?: string | null;
+  note?: string | null;
+  status: CommissionStatus;
+  payroll_period_id: number | null;
+  payslip_id: number | null;
+  paid_at: string | null;
+  created_by: number | null;
+  employee?: { id: number; employee_code: string; first_name: string; last_name: string } | null;
+  payroll_period?: { id: number; name: string; code: string } | null;
+  payslip?: { id: number; slip_no: string } | null;
+  creator?: { id: number; name: string } | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 
