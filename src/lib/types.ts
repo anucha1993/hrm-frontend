@@ -268,6 +268,7 @@ export type EmployeeBrief = {
   full_name: string;
   first_name?: string;
   last_name?: string;
+  nickname?: string | null;
   department_id?: number | null;
   department?: { id: number; name: string } | null;
 };
