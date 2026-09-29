@@ -339,7 +339,7 @@ export default function RotationsTab() {
                   <select required value={assignForm.employee_id} onChange={(e) => setAssignForm({ ...assignForm, employee_id: e.target.value })} className="w-full px-2 py-2 border border-border rounded-lg text-sm">
                     <option value="">— เลือก —</option>
                     {employees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>{emp.employee_code} · {emp.full_name}</option>
+                      <option key={emp.id} value={emp.id}>{emp.employee_code} · {emp.full_name}{emp.nickname ? ` (${emp.nickname})` : ""}</option>
                     ))}
                   </select>
                 </div>
@@ -375,7 +375,7 @@ export default function RotationsTab() {
                       <tr><td colSpan={4} className="px-3 py-6 text-center text-muted">ยังไม่มีพนักงานในรอบนี้</td></tr>
                     ) : assignments.map((a) => (
                       <tr key={a.id}>
-                        <td className="px-3 py-2">{a.employee ? `${a.employee.employee_code} · ${a.employee.full_name}` : `#${a.employee_id}`}</td>
+                        <td className="px-3 py-2">{a.employee ? `${a.employee.employee_code} · ${a.employee.full_name}${a.employee.nickname ? ` (${a.employee.nickname})` : ""}` : `#${a.employee_id}`}</td>
                         <td className="px-3 py-2">{a.offset}</td>
                         <td className="px-3 py-2 text-xs text-muted">{a.effective_from.substring(0, 10)} → {a.effective_to ? a.effective_to.substring(0, 10) : "ไม่กำหนด"}</td>
                         <td className="px-3 py-2"><button onClick={() => removeAssignment(a)} className="p-1 rounded hover:bg-surface text-red-600"><Trash2 className="w-4 h-4" /></button></td>

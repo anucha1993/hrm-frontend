@@ -206,7 +206,7 @@ export default function CommissionsPage() {
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-foreground">
-                      {c.employee ? `${c.employee.employee_code} - ${c.employee.first_name} ${c.employee.last_name}` : "-"}
+                      {c.employee ? `${c.employee.employee_code} - ${c.employee.first_name} ${c.employee.last_name}${c.employee.nickname ? ` (${c.employee.nickname})` : ""}` : "-"}
                     </td>
                     <td className="px-4 py-2.5 text-muted">{c.title || "-"}</td>
                     <td className="px-4 py-2.5 text-muted">{c.earned_date.slice(0, 10)}</td>

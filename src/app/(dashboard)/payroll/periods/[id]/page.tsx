@@ -36,6 +36,7 @@ interface Employee {
   employee_code: string;
   first_name: string;
   last_name: string;
+  nickname?: string | null;
   status: string;
   department_id: number | null;
   employment_type_id: number | null;
@@ -424,7 +425,7 @@ export default function PayrollPeriodDetailPage() {
                       </td>
                       <td className="px-3 py-3">
                         <div className="font-medium">
-                          {s.employee?.first_name} {s.employee?.last_name}
+                          {s.employee?.first_name} {s.employee?.last_name}{s.employee?.nickname ? ` (${s.employee.nickname})` : ""}
                         </div>
                         <div className="text-xs text-muted font-mono">{s.employee?.employee_code}</div>
                       </td>
@@ -538,6 +539,7 @@ export default function PayrollPeriodDetailPage() {
                           />
                           <span className="font-mono text-xs">{e.employee_code}</span>
                           {e.first_name} {e.last_name}
+                          {e.nickname && <span className="text-muted"> ({e.nickname})</span>}
                           {e.department?.name && <span className="ml-auto text-xs text-muted">{e.department.name}</span>}
                         </label>
                       ))

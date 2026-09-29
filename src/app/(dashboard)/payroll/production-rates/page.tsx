@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Topbar from "@/components/Topbar";
 import { apiFetch, ApiError } from "@/lib/api";
 import { fmtMoney } from "@/lib/payroll";
+import { CATEGORY_OPTIONS, categoryLabel } from "@/lib/productionRates";
 import { Plus, X, Loader2, Edit, Trash2, AlertCircle, Calculator } from "lucide-react";
 
 type WorkType = "cast" | "lift" | "cast_lift" | "flat";
@@ -63,20 +64,6 @@ const UNIT_LABEL: Record<Unit, string> = {
   raft: "แพ",
   meter: "เมตร",
 };
-
-const CATEGORY_OPTIONS = [
-  { value: "pae_front", label: "แพหน้า" },
-  { value: "pae_back", label: "แพหลัง" },
-  { value: "prestress", label: "อัดแรง" },
-  { value: "i15", label: "ไอ 15" },
-  { value: "i18", label: "ไอ 18" },
-  { value: "fence", label: "เสารั้ว" },
-  { value: "pile", label: "เสาเข็ม" },
-  { value: "other", label: "อื่นๆ" },
-];
-
-const categoryLabel = (cat: string | null) =>
-  CATEGORY_OPTIONS.find((c) => c.value === cat)?.label ?? cat ?? "—";
 
 export default function ProductionRatesPage() {
   const [items, setItems] = useState<ProductionRateItem[]>([]);

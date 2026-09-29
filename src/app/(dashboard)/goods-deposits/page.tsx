@@ -206,7 +206,7 @@ export default function GoodsDepositsPage() {
                             {d.employee ? (
                               <div>
                                 <p className="text-sm font-medium text-foreground">
-                                  {d.employee.first_name} {d.employee.last_name}
+                                  {d.employee.first_name} {d.employee.last_name}{d.employee.nickname ? ` (${d.employee.nickname})` : ""}
                                 </p>
                                 <p className="text-xs text-muted font-mono">{d.employee.employee_code}</p>
                               </div>

@@ -45,6 +45,7 @@ export interface EmployeeAdvance {
     employee_code: string;
     first_name: string;
     last_name: string;
+    nickname?: string | null;
   };
   approver?: { id: number; name: string } | null;
   payer?: { id: number; name: string } | null;

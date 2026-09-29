@@ -151,7 +151,7 @@ export default function LeaveApprovalPage() {
                       <td className="px-3 py-3 font-mono text-xs">{r.request_no}</td>
                       <td className="px-3 py-3">
                         <div className="font-medium">
-                          {r.employee?.first_name} {r.employee?.last_name}
+                          {r.employee?.first_name} {r.employee?.last_name}{r.employee?.nickname ? ` (${r.employee.nickname})` : ""}
                         </div>
                         <div className="text-xs text-muted font-mono">{r.employee?.employee_code}</div>
                       </td>
@@ -220,7 +220,7 @@ export default function LeaveApprovalPage() {
               </button>
             </div>
             <div className="p-5 space-y-3 text-sm">
-              <KV label="พนักงาน" value={`${detail.employee?.first_name} ${detail.employee?.last_name} (${detail.employee?.employee_code})`} />
+              <KV label="พนักงาน" value={`${detail.employee?.first_name} ${detail.employee?.last_name}${detail.employee?.nickname ? ` (${detail.employee.nickname})` : ""} (${detail.employee?.employee_code})`} />
               <KV label="ประเภทการลา" value={detail.leave_type?.name ?? "—"} />
               <KV
                 label="ช่วงวันที่"

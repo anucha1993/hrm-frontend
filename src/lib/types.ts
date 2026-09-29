@@ -395,6 +395,7 @@ export type AttendanceRosterRow = {
     employee_code: string;
     first_name: string;
     last_name: string;
+    nickname?: string | null;
     department?: { id: number; name: string; attendance_mode?: "full" | "check_in_only" | "none" } | null;
   };
   date: string;
@@ -461,6 +462,7 @@ export type GoodsDepositSlip = {
     employee_code: string;
     first_name: string;
     last_name: string;
+    nickname?: string | null;
   };
   items?: GoodsDepositItem[];
   payroll_period?: { id: number; name: string; code: string } | null;
@@ -477,7 +479,7 @@ export type DormRoom = {
   last_meter_reading: string;
   is_active: boolean;
   note?: string | null;
-  employee?: { id: number; employee_code: string; first_name: string; last_name: string } | null;
+  employee?: { id: number; employee_code: string; first_name: string; last_name: string; nickname?: string | null } | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -513,7 +515,7 @@ export type ElectricityBillItem = {
   note?: string | null;
   order: number;
   room?: DormRoom;
-  employee?: { id: number; employee_code: string; first_name: string; last_name: string } | null;
+  employee?: { id: number; employee_code: string; first_name: string; last_name: string; nickname?: string | null } | null;
   installments?: ElectricityBillInstallment[];
 };
 
@@ -549,7 +551,7 @@ export type Commission = {
   payslip_id: number | null;
   paid_at: string | null;
   created_by: number | null;
-  employee?: { id: number; employee_code: string; first_name: string; last_name: string } | null;
+  employee?: { id: number; employee_code: string; first_name: string; last_name: string; nickname?: string | null } | null;
   payroll_period?: { id: number; name: string; code: string } | null;
   payslip?: { id: number; slip_no: string } | null;
   creator?: { id: number; name: string } | null;

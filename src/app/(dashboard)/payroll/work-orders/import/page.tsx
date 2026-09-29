@@ -12,6 +12,7 @@ type SummaryRow = {
   employee_code: string;
   first_name: string;
   last_name: string;
+  nickname?: string | null;
   work_orders_count: number;
   total_amount: string;
 };
@@ -170,7 +171,7 @@ export default function ImportWorkOrdersPage() {
                   {rows.map((r) => (
                     <tr key={r.employee_id} className="border-b border-border last:border-0">
                       <td className="px-3 py-3 text-xs font-mono">{r.employee_code}</td>
-                      <td className="px-3 py-3 font-medium">{r.first_name} {r.last_name}</td>
+                      <td className="px-3 py-3 font-medium">{r.first_name} {r.last_name}{r.nickname ? ` (${r.nickname})` : ""}</td>
                       <td className="px-3 py-3 text-right">{r.work_orders_count}</td>
                       <td className="px-3 py-3 text-right font-bold text-green-700">{fmtMoney(r.total_amount)}</td>
                     </tr>

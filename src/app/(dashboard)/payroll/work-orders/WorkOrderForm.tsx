@@ -1,21 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Topbar from "@/components/Topbar";
+import EmployeeCombobox from "@/components/EmployeeCombobox";
 import { apiFetch, ApiError } from "@/lib/api";
 import { fmtMoney } from "@/lib/payroll";
 import { useAuth } from "@/lib/auth-context";
+import { categoryLabel } from "@/lib/productionRates";
 import {
   Plus, Trash2, Loader2, AlertCircle, ArrowLeft, Save, Users, Crown,
-  Pencil, RotateCcw, CalendarRange, Coins, CheckCircle2, Printer,
+  Pencil, RotateCcw, CalendarRange, Coins, CheckCircle2, Printer, ChevronDown, Search, ChevronLeft,
 } from "lucide-react";
 
 type RateItem = {
   id: number;
   code: string;
   name: string;
+  category: string | null;
   unit: "raft" | "meter";
   work_type: "cast" | "lift" | "cast_lift" | "flat";
   target_qty: string | null;
@@ -28,6 +32,7 @@ type EmployeeBrief = {
   employee_code: string;
   first_name: string;
   last_name: string;
+  nickname?: string | null;
 };
 
 export type ItemRow = {
@@ -53,6 +58,7 @@ export type ExtraRow = {
   unit: string;
   qty: string;
   rate: string;
+  deduction_type?: string;
   note: string;
 };
 
@@ -85,6 +91,33 @@ export type WorkOrderFormInit = {
 
 const UNIT_LABEL = { raft: "แพ", meter: "เมตร" } as const;
 const WORK_TYPE_LABEL = { cast: "งานเท", lift: "งานยก", cast_lift: "เท+ยก", flat: "เหมา" } as const;
+// คอลัมน์ค่าหักตามแบบฟอร์มกระดาษ — กรอกเป็นตารางรายคน แล้วตอนบันทึกแตกเป็น extra item ละ 1 ช่อง
+// (qty 1 × rate ติดลบ + deduction_type) เพื่อให้ backend/total_amount/ใบพิมพ์ใช้โครงเดิมได้เลย
+const DEDUCTION_COLUMNS = [
+  { key: "advance", label: "เงินเบิก" },
+  { key: "goods", label: "ค่าของ" },
+  { key: "electric", label: "ค่าไฟ" },
+  { key: "insurance", label: "ประกัน" },
+] as const;
+type DeductionKey = (typeof DEDUCTION_COLUMNS)[number]["key"];
+type DeductionRow = { name: string } & Record<DeductionKey, string>;
+
+const blankDeductionRow = (): DeductionRow => ({ name: "", advance: "", goods: "", electric: "", insurance: "" });
+
+// รวม extra ที่มี deduction_type เป็นแถวรายชื่อ (ชื่อซ้ำ/หมวดซ้ำ = บวกรวมกัน)
+// ใช้ qty × rate แทน amount เพราะ amount ถูก mask สำหรับคนไม่มีสิทธิ์ดูเงิน
+function groupDeductions(extras: ExtraRow[]): DeductionRow[] {
+  const rows: DeductionRow[] = [];
+  extras.filter((e) => e.deduction_type).forEach((e) => {
+    const name = e.name.trim();
+    let row = rows.find((r) => r.name === name);
+    if (!row) { row = { ...blankDeductionRow(), name }; rows.push(row); }
+    const key = e.deduction_type as DeductionKey;
+    const amt = Math.abs(Number(e.qty || 0) * Number(e.rate || 0));
+    row[key] = String(Number(row[key] || 0) + amt);
+  });
+  return rows;
+}
 
 const today = () => new Date().toISOString().slice(0, 10);
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
@@ -161,7 +194,11 @@ export default function WorkOrderForm({
   const router = useRouter();
   const { hasPermission } = useAuth();
   const canViewMoney = hasPermission(["payroll.view", "payroll.config"]);
-  const [form, setForm] = useState<WorkOrderFormInit>({ ...initial, extras: initial.extras ?? [] });
+  const [form, setForm] = useState<WorkOrderFormInit>({
+    ...initial,
+    extras: (initial.extras ?? []).filter((e) => !e.deduction_type),
+  });
+  const [deductions, setDeductions] = useState<DeductionRow[]>(() => groupDeductions(initial.extras ?? []));
   const [rateItems, setRateItems] = useState<RateItem[]>([]);
   const [employees, setEmployees] = useState<EmployeeBrief[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -281,11 +318,6 @@ export default function WorkOrderForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
 
-  const empOptions = useMemo(
-    () => employees.map((e) => ({ value: e.id, label: `${e.employee_code} - ${e.first_name} ${e.last_name}` })),
-    [employees]
-  );
-
   function findRate(id: number | "") {
     return rateItems.find((r) => r.id === id) ?? null;
   }
@@ -338,6 +370,31 @@ export default function WorkOrderForm({
   }
   function updateItem(idx: number, patch: Partial<ItemRow>) {
     setForm((f) => ({ ...f, items: f.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)) }));
+  }
+  // เลือกทั้งกลุ่มจาก RateItemPicker: ใส่ตัวแรกในแถวที่เปิด picker อยู่ (ถ้าแถวนั้นยังว่าง) แล้วแทรกที่เหลือเป็นแถวใหม่ต่อท้าย
+  function addItemsFromGroup(idx: number, picked: RateItem[]) {
+    if (picked.length === 0) return;
+    setForm((f) => {
+      const items = [...f.items];
+      const current = items[idx];
+      const makeRow = (rate: RateItem, base?: ItemRow): ItemRow => {
+        const shouldFill = rate.work_type !== "flat" && rate.target_qty !== null;
+        return {
+          rate_at_target_override: "",
+          rate_below_target_override: "",
+          ...base,
+          production_rate_item_id: rate.id,
+          target_qty: shouldFill ? String(rate.target_qty) : (base?.target_qty ?? "0"),
+        };
+      };
+      if (!current.production_rate_item_id) {
+        items[idx] = makeRow(picked[0], current);
+        picked.slice(1).forEach((rate, i) => items.splice(idx + 1 + i, 0, makeRow(rate)));
+      } else {
+        picked.forEach((rate, i) => items.splice(idx + 1 + i, 0, makeRow(rate)));
+      }
+      return { ...f, items };
+    });
   }
 
   // เมื่อชุดผลิตเดียวกันถูกแบ่งทำ 2 ทีมขึ้นไป (เช่น ยก/เท บนจำนวนชิ้นเดียวกัน) —
@@ -400,10 +457,33 @@ export default function WorkOrderForm({
       extras: (f.extras ?? []).map((e, i) => (i === idx ? { ...e, ...patch } : e)),
     }));
   }
-  const extrasTotal = useMemo(
+  // ---------- ค่าหัก (ตารางรายคน) ----------
+  function addDeduction() {
+    setDeductions((d) => [...d, blankDeductionRow()]);
+  }
+  function removeDeduction(idx: number) {
+    setDeductions((d) => d.filter((_, i) => i !== idx));
+  }
+  function updateDeduction(idx: number, patch: Partial<DeductionRow>) {
+    setDeductions((d) => d.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+  const deductionRowTotal = (r: DeductionRow) =>
+    DEDUCTION_COLUMNS.reduce((s, c) => s + Math.abs(Number(r[c.key] || 0)), 0);
+  const deductionsTotal = deductions.reduce((s, r) => s + deductionRowTotal(r), 0);
+  // ชื่อหัวหน้า+ลูกทีม ไว้ให้เลือกในช่องชื่อค่าหัก (พิมพ์เองได้)
+  const memberNameOptions = Array.from(new Set(
+    [form.team_leader_id, ...form.members.map((m) => m.employee_id)]
+      .map((id) => employees.find((x) => x.id === id))
+      .map((emp) => (emp ? emp.nickname || emp.first_name : ""))
+      .filter(Boolean)
+  ));
+
+  // รายการจ่าย-หักเพิ่มเติม (ไม่รวมตารางค่าหัก)
+  const otherExtrasTotal = useMemo(
     () => (form.extras ?? []).reduce((s, e) => s + Number(e.qty || 0) * Number(e.rate || 0), 0),
     [form.extras]
   );
+  const extrasTotal = otherExtrasTotal - deductionsTotal;
 
   async function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -436,15 +516,31 @@ export default function WorkOrderForm({
         members: form.members
           .filter((m) => m.employee_id && m.employee_id !== form.team_leader_id)
           .map((m) => ({ employee_id: m.employee_id, role: m.role || null, note: m.note || null })),
-        extras: (form.extras ?? [])
-          .filter((e) => e.name.trim() !== "")
-          .map((e) => ({
-            name: e.name.trim(),
-            unit: e.unit || null,
-            qty: Number(e.qty || 0),
-            rate: Number(e.rate || 0),
-            note: e.note || null,
-          })),
+        extras: [
+          ...(form.extras ?? [])
+            .filter((e) => e.name.trim() !== "")
+            .map((e) => ({
+              name: e.name.trim(),
+              unit: e.unit || null,
+              qty: Number(e.qty || 0),
+              rate: Number(e.rate || 0),
+              deduction_type: null,
+              note: e.note || null,
+            })),
+          // ตารางค่าหัก: 1 ช่องที่มียอด = 1 extra item (ยอดลบเสมอ)
+          ...deductions
+            .filter((r) => r.name.trim() !== "")
+            .flatMap((r) => DEDUCTION_COLUMNS
+              .filter((c) => Number(r[c.key] || 0) !== 0)
+              .map((c) => ({
+                name: r.name.trim(),
+                unit: null,
+                qty: 1,
+                rate: -Math.abs(Number(r[c.key])),
+                deduction_type: c.key,
+                note: null,
+              }))),
+        ],
       };
       if (isEdit && form.id) {
         await apiFetch(`/payroll/work-orders/${form.id}`, { method: "PUT", body: payload });
@@ -596,7 +692,7 @@ export default function WorkOrderForm({
                       <div key={r.id} className="flex items-center justify-between px-3 py-2 text-sm">
                         <div>
                           <span className="font-medium">{r.code}</span>
-                          {r.team_leader && <span className="text-muted ml-2 text-xs">{r.team_leader.employee_code} - {r.team_leader.first_name} {r.team_leader.last_name}</span>}
+                          {r.team_leader && <span className="text-muted ml-2 text-xs">{r.team_leader.employee_code} - {r.team_leader.first_name} {r.team_leader.last_name}{r.team_leader.nickname ? ` (${r.team_leader.nickname})` : ""}</span>}
                           <span className="text-muted ml-2 text-xs">{fmtMoney(r.total_amount)}</span>
                         </div>
                         <button type="button" disabled={batchBusy} onClick={() => linkBatchTo(r.id)}
@@ -656,12 +752,15 @@ export default function WorkOrderForm({
         {/* Header */}
         <div className="bg-white rounded-xl border border-border p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
           <Field label={<><Crown className="w-3.5 h-3.5 inline mr-1 text-amber-600" />หัวหน้าทีม * (รับค่าจ้าง)</>}>
-            <select required disabled={readOnly} className="payroll-input"
-              value={form.team_leader_id}
-              onChange={(e) => setForm({ ...form, team_leader_id: e.target.value ? Number(e.target.value) : "" })}>
-              <option value="">-- เลือก --</option>
-              {empOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            <EmployeeCombobox
+              employees={employees}
+              value={form.team_leader_id ? String(form.team_leader_id) : ""}
+              onChange={(id) => setForm({ ...form, team_leader_id: id ? Number(id) : "" })}
+              disabled={readOnly}
+              placeholder="-- เลือกหัวหน้าทีม --"
+              clearLabel="-- เลือกหัวหน้าทีม --"
+              className="w-full pl-3 pr-8 py-2 rounded-lg border border-border text-sm bg-white disabled:bg-surface"
+            />
           </Field>
           <Field label="สถานที่ทำงาน">
             <input type="text" disabled={readOnly} className="payroll-input"
@@ -749,11 +848,11 @@ export default function WorkOrderForm({
                     <tr key={idx} className="border-b border-border last:border-0">
                       <td className="px-3 py-2 text-xs text-muted">{idx + 1}</td>
                       <td className="px-3 py-2">
-                        <select required disabled={readOnly} className="payroll-input min-w-[220px]"
+                        <RateItemPicker
+                          rateItems={rateItems}
                           value={item.production_rate_item_id}
-                          onChange={(e) => {
-                            const newId = e.target.value ? Number(e.target.value) : "";
-                            const picked = newId ? rateItems.find((r) => r.id === newId) : null;
+                          disabled={readOnly}
+                          onPick={(picked) => {
                             // auto-fill target จาก system default ก็ต่อเมื่อ user ยังไม่ได้กรอกเอง (เป็น 0)
                             const currentTgt = Number(item.target_qty || 0);
                             const shouldFill =
@@ -762,15 +861,12 @@ export default function WorkOrderForm({
                               picked.target_qty !== null &&
                               currentTgt === 0;
                             updateItem(idx, {
-                              production_rate_item_id: newId,
+                              production_rate_item_id: picked ? picked.id : "",
                               ...(shouldFill ? { target_qty: String(picked!.target_qty) } : {}),
                             });
-                          }}>
-                          <option value="">-- เลือก --</option>
-                          {rateItems.map((r) => (
-                            <option key={r.id} value={r.id}>{r.name} ({r.code})</option>
-                          ))}
-                        </select>
+                          }}
+                          onPickAll={(picked) => addItemsFromGroup(idx, picked)}
+                        />
                       </td>
                       <td className="px-3 py-2 text-xs">
                         {rate ? (
@@ -908,7 +1004,7 @@ export default function WorkOrderForm({
             <div className="flex items-center gap-3">
               {canViewMoney && (
                 <span className="text-xs text-muted">
-                  รวม: <span className="font-bold text-amber-700">{fmtMoney(extrasTotal)}</span>
+                  รวม: <span className="font-bold text-amber-700">{fmtMoney(otherExtrasTotal)}</span>
                 </span>
               )}
               {!readOnly && (
@@ -989,6 +1085,78 @@ export default function WorkOrderForm({
           )}
         </div>
 
+        {/* ค่าหัก — ตารางรายคนตามแบบฟอร์มกระดาษ (ชื่อ / เงินเบิก / ค่าของ / ค่าไฟ / ประกัน) */}
+        {canViewMoney && (
+          <div className="bg-white rounded-xl border border-border">
+            <div className="px-4 py-3 border-b border-border flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Coins className="w-4 h-4 text-red-600" /> ค่าหัก ({deductions.length} คน)
+                </h3>
+                <p className="text-xs text-muted mt-0.5">กรอกยอดเป็นเลขบวก ระบบหักออกจากยอดรวมให้เอง</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted">
+                  รวมค่าหัก: <span className="font-bold text-red-600">{fmtMoney(deductionsTotal)}</span>
+                </span>
+                {!readOnly && (
+                  <button type="button" onClick={addDeduction}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border hover:bg-gray-50">
+                    <Plus className="w-3.5 h-3.5" /> เพิ่มคน
+                  </button>
+                )}
+              </div>
+            </div>
+            {deductions.length === 0 ? (
+              <div className="p-6 text-center text-muted text-sm">— ไม่มีค่าหัก —</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-border">
+                  <tr className="text-left text-xs text-muted uppercase">
+                    <th className="px-3 py-2 w-10">#</th>
+                    <th className="px-3 py-2">ชื่อ *</th>
+                    {DEDUCTION_COLUMNS.map((c) => (
+                      <th key={c.key} className="px-3 py-2 w-32 text-right">{c.label}</th>
+                    ))}
+                    <th className="px-3 py-2 w-32 text-right">รวมค่าหัก</th>
+                    <th className="px-3 py-2 w-12"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deductions.map((r, idx) => (
+                    <tr key={idx} className="border-b border-border last:border-0">
+                      <td className="px-3 py-2 text-center text-xs text-muted">{idx + 1}</td>
+                      <td className="px-3 py-2">
+                        <input type="text" disabled={readOnly} className="payroll-input" list="wo-deduction-names"
+                          placeholder="ชื่อลูกทีม"
+                          value={r.name} onChange={(ev) => updateDeduction(idx, { name: ev.target.value })} />
+                      </td>
+                      {DEDUCTION_COLUMNS.map((c) => (
+                        <td key={c.key} className="px-3 py-2">
+                          <input type="number" step="0.01" min="0" disabled={readOnly} className="payroll-input text-right"
+                            placeholder="0"
+                            value={r[c.key]} onChange={(ev) => updateDeduction(idx, { [c.key]: ev.target.value })} />
+                        </td>
+                      ))}
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums text-red-600">{fmtMoney(deductionRowTotal(r))}</td>
+                      <td className="px-3 py-2 text-right">
+                        {!readOnly && (
+                          <button type="button" onClick={() => removeDeduction(idx)} className="p-1 text-gray-400 hover:text-red-600">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <datalist id="wo-deduction-names">
+              {memberNameOptions.map((n) => <option key={n} value={n} />)}
+            </datalist>
+          </div>
+        )}
+
         {/* Members */}
         <div className="bg-white rounded-xl border border-border overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -1023,12 +1191,13 @@ export default function WorkOrderForm({
                   <tr key={idx} className="border-b border-border last:border-0">
                     <td className="px-3 py-2 text-xs text-muted">{idx + 1}</td>
                     <td className="px-3 py-2">
-                      <select disabled={readOnly} className="payroll-input"
-                        value={m.employee_id}
-                        onChange={(e) => updateMember(idx, { employee_id: e.target.value ? Number(e.target.value) : "" })}>
-                        <option value="">-- เลือก --</option>
-                        {empOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
+                      <EmployeeCombobox
+                        employees={employees}
+                        value={m.employee_id ? String(m.employee_id) : ""}
+                        onChange={(id) => updateMember(idx, { employee_id: id ? Number(id) : "" })}
+                        disabled={readOnly}
+                        className="w-full pl-3 pr-8 py-2 rounded-lg border border-border text-sm bg-white disabled:bg-surface"
+                      />
                     </td>
                     <td className="px-3 py-2">
                       <select disabled={readOnly} className="payroll-input"
@@ -1057,7 +1226,7 @@ export default function WorkOrderForm({
           )}
         </div>
 
-        {isEdit && canViewMoney && (form.items.length > 0 || (form.extras ?? []).length > 0) && (
+        {isEdit && canViewMoney && (form.items.length > 0 || (form.extras ?? []).length > 0 || deductions.length > 0) && (
           <div className="bg-gradient-to-r from-green-50 to-amber-50 rounded-xl border-2 border-green-200 px-4 py-3 flex justify-between items-center">
             <span className="text-sm font-semibold">รวมค่าจ้างทั้งใบ (จ่ายหัวหน้าทีม)</span>
             <span className="text-xl font-bold text-green-700">{fmtMoney(grandTotal + extrasTotal)} บาท</span>
@@ -1133,5 +1302,184 @@ function RateEditButtons({
         </button>
       )}
     </div>
+  );
+}
+
+// เลือกรายการผลิต: แสดง "กลุ่ม" ก่อน กดเข้ากลุ่มแล้วค่อยแตกเป็นรายการ (หรือพิมพ์ค้นหาข้ามกลุ่มได้เลย)
+// ใช้ portal + fixed position เพื่อไม่ให้ panel ถูกตัดขอบโดย overflow-hidden ของตารางที่ครอบอยู่
+function RateItemPicker({
+  rateItems, value, onPick, onPickAll, disabled,
+}: { rateItems: RateItem[]; value: number | ""; onPick: (item: RateItem | null) => void; onPickAll?: (items: RateItem[]) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<{ key: string | null } | null>(null);
+  const [query, setQuery] = useState("");
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const selected = rateItems.find((r) => r.id === value) ?? null;
+
+  const updatePosition = useCallback(() => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.max(rect.width, 288);
+    const left = Math.min(rect.left, window.innerWidth - width - 8);
+    setPos({ top: rect.bottom + 4, left: Math.max(8, left), width });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+    function onClickOutside(e: MouseEvent) {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+      setQuery("");
+      setActiveCategory(null);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [open, updatePosition]);
+
+  // นับจำนวนรายการต่อกลุ่ม (แสดงเฉพาะกลุ่มที่มีรายการจริง)
+  const groups = useMemo(() => {
+    const counts = new Map<string | null, number>();
+    rateItems.forEach((r) => {
+      const key = r.category ?? null;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([key, count]) => ({ key, label: key === null ? "ไม่ระบุกลุ่ม" : categoryLabel(key), count }))
+      .sort((a, b) => a.label.localeCompare(b.label, "th"));
+  }, [rateItems]);
+
+  const queryTrimmed = query.trim();
+  const searching = queryTrimmed.length > 0;
+  const filteredFlat = useMemo(() => {
+    if (!searching) return [];
+    const q = queryTrimmed.toLowerCase();
+    return rateItems.filter((r) => r.name.toLowerCase().includes(q) || r.code.toLowerCase().includes(q));
+  }, [rateItems, queryTrimmed, searching]);
+
+  const itemsInCategory = useMemo(() => {
+    if (searching || !activeCategory) return [];
+    return rateItems.filter((r) => (r.category ?? null) === activeCategory.key);
+  }, [rateItems, activeCategory, searching]);
+
+  function pick(item: RateItem) {
+    onPick(item);
+    setOpen(false);
+    setQuery("");
+    setActiveCategory(null);
+  }
+
+  function pickAll() {
+    if (itemsInCategory.length === 0) return;
+    onPickAll?.(itemsInCategory);
+    setOpen(false);
+    setQuery("");
+    setActiveCategory(null);
+  }
+
+  function clear() {
+    onPick(null);
+    setOpen(false);
+    setQuery("");
+    setActiveCategory(null);
+  }
+
+  return (
+    <>
+      <button ref={btnRef} type="button" disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="w-full min-w-[220px] flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border text-sm bg-white disabled:bg-surface disabled:text-muted text-left">
+        <span className={selected ? "" : "text-muted"}>
+          {selected ? `${selected.name} (${selected.code})` : "-- เลือกรายการผลิต --"}
+        </span>
+        <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+      </button>
+      {open && pos && createPortal(
+        <div ref={panelRef} style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }}
+          className="z-50 max-h-80 overflow-y-auto bg-white border border-border rounded-xl shadow-lg py-1">
+          <div className="px-2 pb-1.5 pt-1 sticky top-0 bg-white border-b border-border z-10">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted" />
+              <input
+                type="text"
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="ค้นหาชื่อ/รหัสรายการ (ข้ามกลุ่มได้)..."
+                className="w-full pl-7 pr-2 py-1.5 rounded-lg border border-border text-xs"
+              />
+            </div>
+          </div>
+
+          {searching ? (
+            filteredFlat.length === 0 ? (
+              <div className="px-3 py-4 text-center text-xs text-muted">ไม่พบรายการ</div>
+            ) : (
+              filteredFlat.map((r) => (
+                <button key={r.id} type="button" onClick={() => pick(r)}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-primary-50 ${r.id === value ? "bg-primary-50 font-medium text-primary-700" : ""}`}>
+                  <div>{r.name} <span className="text-muted text-xs">({r.code})</span></div>
+                  <div className="text-[11px] text-muted">{categoryLabel(r.category)}</div>
+                </button>
+              ))
+            )
+          ) : !activeCategory ? (
+            <>
+              {selected && (
+                <button type="button" onClick={clear}
+                  className="w-full text-left px-3 py-2 text-xs text-muted hover:bg-surface border-b border-border">
+                  ล้างการเลือก
+                </button>
+              )}
+              {groups.length === 0 ? (
+                <div className="px-3 py-4 text-center text-xs text-muted">ยังไม่มีรายการผลิต</div>
+              ) : (
+                groups.map((g) => (
+                  <button key={g.key ?? "__none__"} type="button" onClick={() => setActiveCategory({ key: g.key })}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-primary-50">
+                    <span>{g.label}</span>
+                    <span className="text-xs text-muted">{g.count} รายการ ›</span>
+                  </button>
+                ))
+              )}
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={() => setActiveCategory(null)}
+                className="w-full flex items-center gap-1 px-3 py-2 text-xs font-medium text-primary-700 hover:bg-primary-50 border-b border-border sticky top-0 bg-white">
+                <ChevronLeft className="w-3.5 h-3.5" /> {activeCategory.key === null ? "ไม่ระบุกลุ่ม" : categoryLabel(activeCategory.key)}
+              </button>
+              {onPickAll && itemsInCategory.length > 0 && (
+                <button type="button" onClick={pickAll}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 border-b border-border">
+                  เลือกทั้งหมด ({itemsInCategory.length} รายการ) — เพิ่มเป็นหลายแถวทันที
+                </button>
+              )}
+              {itemsInCategory.length === 0 ? (
+                <div className="px-3 py-4 text-center text-xs text-muted">ไม่มีรายการในกลุ่มนี้</div>
+              ) : (
+                itemsInCategory.map((r) => (
+                  <button key={r.id} type="button" onClick={() => pick(r)}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-primary-50 ${r.id === value ? "bg-primary-50 font-medium text-primary-700" : ""}`}>
+                    {r.name} <span className="text-muted text-xs">({r.code})</span>
+                  </button>
+                ))
+              )}
+            </>
+          )}
+        </div>,
+        document.body
+      )}
+    </>
   );
 }

@@ -8,10 +8,11 @@ import Topbar from "@/components/Topbar";
 import { apiFetch, ApiError } from "@/lib/api";
 import { fmtMoney, fmtDate } from "@/lib/payroll";
 import { useAuth } from "@/lib/auth-context";
+import { categoryLabel } from "@/lib/productionRates";
 import WorkOrderForm, { type WorkOrderFormInit, type ItemRow, type MemberRow, type ExtraRow, type LinkedWorkOrderBrief } from "../WorkOrderForm";
 
-type RateItemBrief = { id: number; code: string; name: string; unit: string; work_type: string };
-type EmployeeBrief = { id: number; employee_code: string; first_name: string; last_name: string };
+type RateItemBrief = { id: number; code: string; name: string; unit: string; work_type: string; category?: string | null };
+type EmployeeBrief = { id: number; employee_code: string; first_name: string; last_name: string; nickname?: string | null };
 
 type DailyEntryItem = {
   id: number;
@@ -56,7 +57,7 @@ type WorkOrderDetail = {
     rate_item: RateItemBrief | null;
   }>;
   members: Array<{ id: number; employee_id: number; role: string | null; note: string | null; employee: EmployeeBrief | null }>;
-  extra_items?: Array<{ id: number; name: string; unit: string | null; qty: string; rate: string; amount: string; note: string | null }>;
+  extra_items?: Array<{ id: number; name: string; unit: string | null; qty: string; rate: string; amount: string; deduction_type?: string | null; note: string | null }>;
   daily_entries: DailyEntry[];
 };
 
@@ -124,6 +125,7 @@ export default function EditWorkOrderPage() {
       unit: e.unit ?? "",
       qty: String(e.qty),
       rate: String(e.rate),
+      deduction_type: e.deduction_type ?? "",
       note: e.note ?? "",
     })),
   };
@@ -442,7 +444,7 @@ function PrintDailyOrderModal({ wo, entry, onClose }: { wo: WorkOrderDetail; ent
     helper: "ผู้ช่วย",
   };
   const leaderName = wo.team_leader
-    ? `${wo.team_leader.first_name} ${wo.team_leader.last_name}`.trim()
+    ? `${wo.team_leader.first_name} ${wo.team_leader.last_name}${wo.team_leader.nickname ? ` (${wo.team_leader.nickname})` : ""}`.trim()
     : "—";
 
   return (
@@ -582,7 +584,7 @@ function PrintDailyOrderModal({ wo, entry, onClose }: { wo: WorkOrderDetail; ent
                     <td className="border border-gray-700 px-2 py-2 text-center">{idx + 1}</td>
                     <td className="border border-gray-700 px-2 py-2">{m.employee?.employee_code ?? "-"}</td>
                     <td className="border border-gray-700 px-2 py-2">
-                      {m.employee ? `${m.employee.first_name} ${m.employee.last_name}` : "-"}
+                      {m.employee ? `${m.employee.first_name} ${m.employee.last_name}${m.employee.nickname ? ` (${m.employee.nickname})` : ""}` : "-"}
                     </td>
                     <td className="border border-gray-700 px-2 py-2">{roleLabel[m.role ?? ""] ?? (m.role || "-")}</td>
                     <td className="border border-gray-700 px-2 py-2"></td>
@@ -623,14 +625,24 @@ function PrintSummaryModal({ wo, canViewMoney, onClose }: { wo: WorkOrderDetail;
     monthly: "รายเดือน",
     custom: "กำหนดเอง",
   };
-  const roleLabel: Record<string, string> = {
-    caster: "คนเท",
-    lifter: "คนยก",
-    helper: "ผู้ช่วย",
-  };
   const leaderName = wo.team_leader
-    ? `${wo.team_leader.first_name} ${wo.team_leader.last_name}`.trim()
+    ? `${wo.team_leader.first_name} ${wo.team_leader.last_name}${wo.team_leader.nickname ? ` (${wo.team_leader.nickname})` : ""}`.trim()
     : "—";
+
+  // สถานะเกณฑ์ — ตรงกับ WorkOrderItem::recompute(): actual >= target = ถึงเกณฑ์ (ได้เรทสูง)
+  // งานเหมา หรือไม่ได้ตั้งเป้า (target <= 0) ไม่มีเกณฑ์ → ไม่นับ
+  const targetStatus = (it: WorkOrderDetail["items"][number]): boolean | null => {
+    const target = Number(it.target_qty);
+    if (it.rate_item?.work_type === "flat" || target <= 0) return null;
+    return Number(it.actual_qty_total) >= target;
+  };
+  const judged = wo.items.map(targetStatus).filter((x): x is boolean => x !== null);
+  const overallMet: boolean | null = judged.length === 0 ? null : judged.every(Boolean);
+  const StatusBadge = ({ met, big }: { met: boolean; big?: boolean }) => (
+    <span className={`inline-block rounded border px-1.5 ${big ? "text-base font-bold px-3 py-0.5 border-2" : "text-xs font-semibold"} ${met ? "border-green-700 text-green-700" : "border-red-600 text-red-600"}`}>
+      {met ? "ถึงเกณฑ์" : "ไม่ถึงเกณฑ์"}
+    </span>
+  );
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-6 print:static print:bg-white print:overflow-visible print:py-0">
@@ -651,156 +663,199 @@ function PrintSummaryModal({ wo, canViewMoney, onClose }: { wo: WorkOrderDetail;
 
         {/* Printable area */}
         <div className="print-area p-8 text-[13px] text-gray-900">
-          <div className="text-center mb-4">
-            <div className="text-xl font-bold">ใบจ่ายงาน {wo.code}</div>
-            <div className="text-sm text-gray-600">Work Order Payment Summary</div>
+          <div className="mb-2">
+            <div className="flex items-center gap-3">
+              <div className="text-xl font-bold">ใบจ่ายงาน {wo.code}</div>
+              {overallMet !== null && <StatusBadge met={overallMet} big />}
+            </div>
+            <div className="flex flex-wrap gap-x-4 text-sm">
+              <span>{fmtDate(wo.start_date)} → {fmtDate(wo.end_date)}</span>
+              <span>หัวหน้าทีม: <span className="font-semibold">{leaderName}</span></span>
+              {wo.location_name && <span>สถานที่: {wo.location_name}</span>}
+              <span className="ml-auto text-gray-600">{periodLabel[wo.period_type] ?? wo.period_type} · บันทึก {wo.daily_entries.length} วัน</span>
+            </div>
+            {wo.note && <div className="text-sm text-gray-600 mt-0.5">หมายเหตุ: {wo.note}</div>}
           </div>
 
-          <table className="w-full mb-4">
-            <tbody>
-              <tr>
-                <td className="py-1 w-32 text-gray-600">เลขที่ใบงาน</td>
-                <td className="py-1 font-semibold">{wo.code}</td>
-                <td className="py-1 w-28 text-gray-600">บันทึกแล้ว</td>
-                <td className="py-1 font-semibold">{wo.daily_entries.length} วัน</td>
-              </tr>
-              <tr>
-                <td className="py-1 text-gray-600">ช่วงงาน</td>
-                <td className="py-1">{fmtDate(wo.start_date)} → {fmtDate(wo.end_date)}</td>
-                <td className="py-1 text-gray-600">รอบจ่าย</td>
-                <td className="py-1">{periodLabel[wo.period_type] ?? wo.period_type}</td>
-              </tr>
-              <tr>
-                <td className="py-1 text-gray-600">หัวหน้าทีม</td>
-                <td className="py-1 font-semibold">{leaderName}</td>
-                <td className="py-1 text-gray-600">สถานที่</td>
-                <td className="py-1">{wo.location_name ?? "—"}</td>
-              </tr>
-              {wo.note && (
-                <tr>
-                  <td className="py-1 text-gray-600 align-top">หมายเหตุ</td>
-                  <td className="py-1" colSpan={3}>{wo.note}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          {/* รายการงาน — เขียนเป็นบรรทัดคำนวณตามแบบฟอร์มกระดาษจริง: ชื่อรายการ ราคา x จำนวน = รวม (ไม่มีกรอบตาราง) */}
+          {(() => {
+            const groups: Array<{ key: string | null; label: string; items: typeof wo.items }> = [];
+            wo.items.forEach((it) => {
+              const key = it.rate_item?.category ?? null;
+              let g = groups.find((x) => x.key === key);
+              if (!g) {
+                g = { key, label: key ? categoryLabel(key) : "อื่นๆ", items: [] };
+                groups.push(g);
+              }
+              g.items.push(it);
+            });
+            return groups.map((g) => {
+              const groupTotal = g.items.reduce((s, it) => s + Number(it.total_amount || 0), 0);
+              return (
+                <div key={g.key ?? "__none__"} className="mb-4">
+                  <div className="font-semibold underline mb-1">แบบฟอร์ม {g.label}</div>
+                  <div className="space-y-0.5 pl-2">
+                    {g.items.map((it) => (
+                      <div key={it.id} className="flex items-baseline gap-2">
+                        <span className="min-w-[220px]">{it.rate_item?.name ?? "—"}</span>
+                        <span>{Number(it.actual_qty_total)} {it.rate_item?.unit === "raft" ? "แพ" : it.rate_item?.unit === "meter" ? "เมตร" : ""}</span>
+                        {canViewMoney && (
+                          <>
+                            <span>x</span>
+                            <span>{fmtMoney(it.rate_used)} บาท</span>
+                            <span>=</span>
+                            <span className="font-semibold">{fmtMoney(it.total_amount)}</span>
+                          </>
+                        )}
+                        {(() => {
+                          const met = targetStatus(it);
+                          if (met === null) return null;
+                          return (
+                            <span className="ml-2 inline-flex items-baseline gap-1">
+                              <StatusBadge met={met} />
+                              <span className="text-xs text-gray-600">(เป้า {Number(it.target_qty)})</span>
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    ))}
+                  </div>
+                  {canViewMoney && (
+                    <div className="mt-1 pl-2 text-right">
+                      ยอดรวม{g.label}ได้ = <span className="font-bold">{fmtMoney(groupTotal)}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
 
-          {/* รายการงาน */}
-          <div className="font-semibold mb-1">รายการงานที่สั่งทำ (ยอดรวมทั้งใบงาน)</div>
-          <table className="w-full border border-gray-700 mb-4">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="border border-gray-700 px-2 py-1 w-10">#</th>
-                <th className="border border-gray-700 px-2 py-1 text-left">รายการผลิต</th>
-                <th className="border border-gray-700 px-2 py-1 w-16">หน่วย</th>
-                <th className="border border-gray-700 px-2 py-1 w-20">เป้ารวม</th>
-                <th className="border border-gray-700 px-2 py-1 w-20">สั่งรวม</th>
-                <th className="border border-gray-700 px-2 py-1 w-20">ผลิตจริงรวม</th>
-                {canViewMoney && (
+          {/* รายการจ่ายเพิ่ม/ค่าหัก — แยกตามแบบฟอร์มกระดาษ:
+              - ยอดบวก (เช่น ค่าผูกหู) = รายได้เพิ่ม เขียนเป็นบรรทัดคำนวณต่อจากรายการผลิต
+              - ยอดลบที่เลือกหมวดไว้ = ตารางค่าหักรายคน (ชื่อ / เงินเบิก / ค่าของ / ค่าไฟ / ประกัน / รวม) รวมแถวชื่อซ้ำเป็นแถวเดียว
+              - ยอดลบที่ไม่ระบุหมวด (เช่น แผ่นหน้า) = บรรทัดคำนวณใต้ตาราง
+              ในตารางแสดงเป็นยอดบวกเหมือนกระดาษ (DB เก็บเป็นยอดลบเพื่อให้ total_amount หักถูก) */}
+          {canViewMoney && (() => {
+            const extras = wo.extra_items ?? [];
+            const incomeExtras = extras.filter((ex) => Number(ex.amount) >= 0);
+            const deductions = extras.filter((ex) => Number(ex.amount) < 0);
+            const typedDeductions = deductions.filter((ex) => ex.deduction_type);
+            const otherDeductions = deductions.filter((ex) => !ex.deduction_type);
+
+            const types = ["advance", "goods", "electric", "insurance"] as const;
+            const byName: Array<{ name: string; sums: Record<string, number>; total: number }> = [];
+            typedDeductions.forEach((ex) => {
+              const name = ex.name.trim();
+              let row = byName.find((r) => r.name === name);
+              if (!row) {
+                row = { name, sums: {}, total: 0 };
+                byName.push(row);
+              }
+              const amt = Math.abs(Number(ex.amount));
+              row.sums[ex.deduction_type!] = (row.sums[ex.deduction_type!] ?? 0) + amt;
+              row.total += amt;
+            });
+            const colTotal = (t: string) => byName.reduce((s, r) => s + (r.sums[t] ?? 0), 0);
+
+            const itemsTotal = wo.items.reduce((s, it) => s + Number(it.total_amount || 0), 0);
+            const incomeTotal = itemsTotal + incomeExtras.reduce((s, ex) => s + Number(ex.amount || 0), 0);
+            const deductionTotal = deductions.reduce((s, ex) => s + Math.abs(Number(ex.amount || 0)), 0);
+            const calcLine = (ex: (typeof extras)[number]) => (
+              <div key={ex.id} className="flex items-baseline gap-2">
+                <span className="min-w-[220px]">{ex.name}</span>
+                <span>{Number(ex.qty)} {ex.unit ?? ""}</span>
+                <span>x</span>
+                <span>{fmtMoney(Math.abs(Number(ex.rate)))} บาท</span>
+                <span>=</span>
+                <span className="font-semibold">{fmtMoney(Math.abs(Number(ex.amount)))}</span>
+                {ex.note && <span className="text-gray-500 text-xs">({ex.note})</span>}
+              </div>
+            );
+
+            return (
+              <>
+                {incomeExtras.length > 0 && (
+                  <div className="mb-4">
+                    <div className="font-semibold underline mb-1">รายการจ่ายเพิ่ม</div>
+                    <div className="space-y-0.5 pl-2">{incomeExtras.map(calcLine)}</div>
+                  </div>
+                )}
+
+                <div className="mb-4 pl-2 text-right">
+                  ได้ยอดรวมเป็นเงิน = <span className="font-bold">{fmtMoney(incomeTotal)}</span>
+                </div>
+
+                {deductions.length > 0 && (
                   <>
-                    <th className="border border-gray-700 px-2 py-1 w-24">อัตรา/หน่วย</th>
-                    <th className="border border-gray-700 px-2 py-1 w-28">รวมเงิน</th>
+                    <div className="font-semibold mb-1">ค่าหัก</div>
+                    {byName.length > 0 && (
+                      <table className="w-full border border-gray-700 mb-2">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th className="border border-gray-700 px-2 py-1 text-left w-40">ชื่อ</th>
+                            <th className="border border-gray-700 px-2 py-1 w-20">เงินเบิก</th>
+                            <th className="border border-gray-700 px-2 py-1 w-20">ค่าของ</th>
+                            <th className="border border-gray-700 px-2 py-1 w-20">ค่าไฟ</th>
+                            <th className="border border-gray-700 px-2 py-1 w-20">ประกัน</th>
+                            <th className="border border-gray-700 px-2 py-1 w-24">รวมค่าหัก</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {byName.map((r) => (
+                            <tr key={r.name}>
+                              <td className="border border-gray-700 px-2 py-1">{r.name}</td>
+                              {types.map((t) => (
+                                <td key={t} className="border border-gray-700 px-2 py-1 text-right">
+                                  {r.sums[t] ? fmtMoney(r.sums[t]) : "-"}
+                                </td>
+                              ))}
+                              <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{fmtMoney(r.total)}</td>
+                            </tr>
+                          ))}
+                          {byName.length > 1 && (
+                            <tr className="bg-gray-50 font-semibold">
+                              <td className="border border-gray-700 px-2 py-1">รวม</td>
+                              {types.map((t) => (
+                                <td key={t} className="border border-gray-700 px-2 py-1 text-right">
+                                  {colTotal(t) ? fmtMoney(colTotal(t)) : "-"}
+                                </td>
+                              ))}
+                              <td className="border border-gray-700 px-2 py-1 text-right">
+                                {fmtMoney(byName.reduce((s, r) => s + r.total, 0))}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    )}
+                    {otherDeductions.length > 0 && (
+                      <div className="space-y-0.5 pl-2 mb-2">{otherDeductions.map(calcLine)}</div>
+                    )}
                   </>
                 )}
-              </tr>
-            </thead>
-            <tbody>
-              {wo.items.map((it, idx) => {
-                const assignedTotal = wo.daily_entries
-                  .flatMap((e) => e.items)
-                  .filter((ei) => ei.work_order_item_id === it.id)
-                  .reduce((s, ei) => s + Number(ei.assigned_qty ?? 0), 0);
-                return (
-                  <tr key={it.id}>
-                    <td className="border border-gray-700 px-2 py-1 text-center">{idx + 1}</td>
-                    <td className="border border-gray-700 px-2 py-1">{it.rate_item?.name ?? "—"}</td>
-                    <td className="border border-gray-700 px-2 py-1 text-center">{it.rate_item?.unit ?? "-"}</td>
-                    <td className="border border-gray-700 px-2 py-1 text-right">{Number(it.target_qty)}</td>
-                    <td className="border border-gray-700 px-2 py-1 text-right">{assignedTotal > 0 ? assignedTotal : ""}</td>
-                    <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{Number(it.actual_qty_total)}</td>
-                    {canViewMoney && (
-                      <>
-                        <td className="border border-gray-700 px-2 py-1 text-right">{fmtMoney(it.rate_used)}</td>
-                        <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{fmtMoney(it.total_amount)}</td>
-                      </>
+
+                {/* ยอดรวมเป็นเงิน - ค่าหัก = ยอดสุทธิ (ตามรูปแบบใบสรุปยอดกระดาษ) */}
+                <div className="flex justify-end mb-6">
+                  <div className="w-80 text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span>ยอดรวมเป็นเงิน</span>
+                      <span className="font-semibold">{fmtMoney(incomeTotal)}</span>
+                    </div>
+                    {deductions.length > 0 && (
+                      <div className="flex justify-between">
+                        <span>หัก: ยอดรวมค่าหัก</span>
+                        <span className="font-semibold text-red-600">{fmtMoney(deductionTotal)}</span>
+                      </div>
                     )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {/* รายการจ่าย-หักเพิ่มเติม */}
-          {canViewMoney && wo.extra_items && wo.extra_items.length > 0 && (
-            <>
-              <div className="font-semibold mb-1">รายการจ่าย-หักเพิ่มเติม</div>
-              <table className="w-full border border-gray-700 mb-4">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="border border-gray-700 px-2 py-1 w-10">#</th>
-                    <th className="border border-gray-700 px-2 py-1 text-left">รายการ</th>
-                    <th className="border border-gray-700 px-2 py-1 w-20">หน่วย</th>
-                    <th className="border border-gray-700 px-2 py-1 w-24">จำนวน</th>
-                    <th className="border border-gray-700 px-2 py-1 w-28">ราคา/หน่วย</th>
-                    <th className="border border-gray-700 px-2 py-1 w-28">รวมเงิน</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {wo.extra_items.map((ex, idx) => (
-                    <tr key={ex.id}>
-                      <td className="border border-gray-700 px-2 py-1 text-center">{idx + 1}</td>
-                      <td className="border border-gray-700 px-2 py-1">{ex.name}</td>
-                      <td className="border border-gray-700 px-2 py-1 text-center">{ex.unit ?? "-"}</td>
-                      <td className="border border-gray-700 px-2 py-1 text-right">{Number(ex.qty)}</td>
-                      <td className="border border-gray-700 px-2 py-1 text-right">{fmtMoney(ex.rate)}</td>
-                      <td className={`border border-gray-700 px-2 py-1 text-right font-semibold ${Number(ex.amount) < 0 ? "text-red-600" : ""}`}>{fmtMoney(ex.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-
-          {/* ยอดรวมทั้งสิ้น */}
-          {canViewMoney && (
-            <div className="flex justify-end mb-6">
-              <div className="w-72 flex justify-between border-t-2 border-gray-700 pt-2">
-                <span className="font-semibold">ยอดรวมทั้งสิ้น</span>
-                <span className="font-bold text-lg">{fmtMoney(wo.total_amount)} บาท</span>
-              </div>
-            </div>
-          )}
-
-          {/* ผู้รับงาน */}
-          <div className="font-semibold mb-1">ผู้รับงาน (สมาชิกทีม)</div>
-          <table className="w-full border border-gray-700 mb-6">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="border border-gray-700 px-2 py-1 w-10">#</th>
-                <th className="border border-gray-700 px-2 py-1 w-28">รหัส</th>
-                <th className="border border-gray-700 px-2 py-1 text-left">ชื่อ-นามสกุล</th>
-                <th className="border border-gray-700 px-2 py-1 w-32">บทบาท</th>
-                <th className="border border-gray-700 px-2 py-1 w-48">ลงชื่อรับงาน</th>
-              </tr>
-            </thead>
-            <tbody>
-              {wo.members.length === 0 ? (
-                <tr><td colSpan={5} className="border border-gray-700 px-2 py-3 text-center text-gray-500">— ไม่มีสมาชิก —</td></tr>
-              ) : (
-                wo.members.map((m, idx) => (
-                  <tr key={m.id}>
-                    <td className="border border-gray-700 px-2 py-2 text-center">{idx + 1}</td>
-                    <td className="border border-gray-700 px-2 py-2">{m.employee?.employee_code ?? "-"}</td>
-                    <td className="border border-gray-700 px-2 py-2">
-                      {m.employee ? `${m.employee.first_name} ${m.employee.last_name}` : "-"}
-                    </td>
-                    <td className="border border-gray-700 px-2 py-2">{roleLabel[m.role ?? ""] ?? (m.role || "-")}</td>
-                    <td className="border border-gray-700 px-2 py-2"></td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    <div className="flex justify-between border-t-2 border-gray-700 pt-1 mt-1">
+                      <span className="font-semibold">ยอดสุทธิ (จ่ายจริง)</span>
+                      <span className="font-bold text-lg">{fmtMoney(wo.total_amount)} บาท</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           {/* ลายเซ็น */}
           <div className="grid grid-cols-3 gap-8 mt-12">

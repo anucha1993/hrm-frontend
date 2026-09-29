@@ -15,7 +15,7 @@ import {
 } from "@/lib/advance";
 import { Loader2, Check, X, AlertCircle, FileText, Plus, Banknote, MinusCircle, CheckCircle2, XCircle, Ticket, Printer } from "lucide-react";
 
-type EmployeeBrief = { id: number; employee_code: string; first_name: string; last_name: string };
+type EmployeeBrief = { id: number; employee_code: string; first_name: string; last_name: string; nickname?: string | null };
 
 const TABS: { key: AdvanceStatus; label: string }[] = [
   { key: "pending", label: "รออนุมัติ" },
@@ -101,7 +101,7 @@ export default function AdvanceApprovalPage() {
   }, []);
 
   const empOptions = useMemo(
-    () => employees.map((e) => ({ value: e.id, label: `${e.employee_code} - ${e.first_name} ${e.last_name}` })),
+    () => employees.map((e) => ({ value: e.id, label: `${e.employee_code} - ${e.first_name} ${e.last_name}${e.nickname ? ` (${e.nickname})` : ""}` })),
     [employees],
   );
 
@@ -334,7 +334,7 @@ export default function AdvanceApprovalPage() {
                       <td className="px-3 py-3 font-mono text-xs">{r.request_no}</td>
                       <td className="px-3 py-3">
                         <div className="font-medium">
-                          {r.employee?.first_name} {r.employee?.last_name}
+                          {r.employee?.first_name} {r.employee?.last_name}{r.employee?.nickname ? ` (${r.employee.nickname})` : ""}
                         </div>
                         <div className="text-xs text-muted font-mono">{r.employee?.employee_code}</div>
                       </td>
@@ -525,7 +525,7 @@ export default function AdvanceApprovalPage() {
               </button>
             </div>
             <div className="p-5 space-y-3 text-sm">
-              <KV label="พนักงาน" value={`${detail.employee?.first_name} ${detail.employee?.last_name} (${detail.employee?.employee_code})`} />
+              <KV label="พนักงาน" value={`${detail.employee?.first_name} ${detail.employee?.last_name}${detail.employee?.nickname ? ` (${detail.employee.nickname})` : ""} (${detail.employee?.employee_code})`} />
               <KV label="วันที่ยื่นคำขอ" value={fmtDate(detail.request_date)} />
               <KV label="จำนวนเงิน" value={`${fmtMoney(detail.amount)} บาท`} />
               <KV label="หักคืนแล้ว" value={`${fmtMoney(detail.repaid_amount)} บาท`} />
@@ -682,7 +682,7 @@ export default function AdvanceApprovalPage() {
               </button>
             </div>
             <div className="p-5 space-y-4 text-sm">
-              <KV label="พนักงาน" value={`${payReq.employee?.first_name} ${payReq.employee?.last_name} (${payReq.employee?.employee_code})`} />
+              <KV label="พนักงาน" value={`${payReq.employee?.first_name} ${payReq.employee?.last_name}${payReq.employee?.nickname ? ` (${payReq.employee.nickname})` : ""} (${payReq.employee?.employee_code})`} />
               <KV label="จำนวนเงิน" value={`${fmtMoney(payReq.amount)} บาท`} />
 
               <div>

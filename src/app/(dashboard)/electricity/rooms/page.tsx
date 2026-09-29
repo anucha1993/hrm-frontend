@@ -166,7 +166,7 @@ export default function DormRoomsPage() {
                       </button>
                     </td>
                     <td className="px-4 py-2.5 text-foreground">
-                      {r.employee ? `${r.employee.employee_code} - ${r.employee.first_name} ${r.employee.last_name}` : <span className="text-muted">ว่าง</span>}
+                      {r.employee ? `${r.employee.employee_code} - ${r.employee.first_name} ${r.employee.last_name}${r.employee.nickname ? ` (${r.employee.nickname})` : ""}` : <span className="text-muted">ว่าง</span>}
                     </td>
                     <td className="px-4 py-2.5 text-right">{thb(r.rent_amount)}</td>
                     <td className="px-4 py-2.5 text-right">{thb(r.last_meter_reading)}</td>

@@ -315,7 +315,7 @@ export default function SlipDetailPage() {
               </div>
               <div className="text-sm">
                 <span className="text-muted">พนักงาน:</span>{" "}
-                <span className="font-medium">{slip.employee?.first_name} {slip.employee?.last_name}</span>{" "}
+                <span className="font-medium">{slip.employee?.first_name} {slip.employee?.last_name}{slip.employee?.nickname ? ` (${slip.employee.nickname})` : ""}</span>{" "}
                 <span className="text-xs text-muted font-mono">({slip.employee?.employee_code})</span>
               </div>
             </div>
@@ -602,7 +602,7 @@ export default function SlipDetailPage() {
                 <div>
                   <label className="block text-xs font-medium text-muted mb-1">พนักงาน</label>
                   <div className="px-3 py-2.5 rounded-xl border border-border text-sm bg-surface">
-                    {slip.employee?.first_name} {slip.employee?.last_name}{" "}
+                    {slip.employee?.first_name} {slip.employee?.last_name}{slip.employee?.nickname ? ` (${slip.employee.nickname})` : ""}{" "}
                     <span className="text-xs text-muted font-mono">({slip.employee?.employee_code})</span>
                   </div>
                 </div>

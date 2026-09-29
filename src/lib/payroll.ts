@@ -212,6 +212,7 @@ export interface PayrollSlip {
     employee_code: string;
     first_name: string;
     last_name: string;
+    nickname?: string | null;
   };
   period?: PayrollPeriod;
   approvals?: {

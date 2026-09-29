@@ -149,7 +149,7 @@ export default function EmployeeCompensationPage({ params }: { params: Promise<{
             </Link>
             <div>
               <h3 className="text-lg font-semibold text-foreground">
-                {employee ? employee.full_name : "..."}
+                {employee ? `${employee.full_name}${employee.nickname ? ` (${employee.nickname})` : ""}` : "..."}
               </h3>
               {employee && <p className="text-xs text-muted">{employee.employee_code}</p>}
             </div>

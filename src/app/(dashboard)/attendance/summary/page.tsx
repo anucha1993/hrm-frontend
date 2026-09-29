@@ -234,7 +234,7 @@ export default function AttendanceSummaryPage() {
                     <tr key={r.employee.id} className="border-b border-border last:border-0 hover:bg-gray-50/50">
                       <td className="px-3 py-3">
                         <div className="font-medium">
-                          {r.employee.first_name} {r.employee.last_name}
+                          {r.employee.first_name} {r.employee.last_name}{r.employee.nickname ? ` (${r.employee.nickname})` : ""}
                         </div>
                         <div className="text-xs text-muted font-mono">{r.employee.employee_code}</div>
                       </td>

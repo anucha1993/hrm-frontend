@@ -262,7 +262,7 @@ function SwapsSection() {
                 <select required value={fRequester} onChange={(e) => setFRequester(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm">
                   <option value="">— เลือกพนักงาน —</option>
                   {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>{emp.employee_code} · {emp.full_name}</option>
+                    <option key={emp.id} value={emp.id}>{emp.employee_code} · {emp.full_name}{emp.nickname ? ` (${emp.nickname})` : ""}</option>
                   ))}
                 </select>
               </div>
@@ -271,7 +271,7 @@ function SwapsSection() {
                 <select required value={fCounterparty} onChange={(e) => setFCounterparty(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm">
                   <option value="">— เลือกพนักงาน —</option>
                   {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>{emp.employee_code} · {emp.full_name}</option>
+                    <option key={emp.id} value={emp.id}>{emp.employee_code} · {emp.full_name}{emp.nickname ? ` (${emp.nickname})` : ""}</option>
                   ))}
                 </select>
               </div>
@@ -402,7 +402,7 @@ function OverridesSection() {
           <select required value={fEmp} onChange={(e) => setFEmp(e.target.value)} className="w-full px-2 py-2 border border-border rounded-lg text-sm">
             <option value="">— เลือก —</option>
             {employees.map((emp) => (
-              <option key={emp.id} value={emp.id}>{emp.employee_code} · {emp.full_name}</option>
+              <option key={emp.id} value={emp.id}>{emp.employee_code} · {emp.full_name}{emp.nickname ? ` (${emp.nickname})` : ""}</option>
             ))}
           </select>
         </div>
@@ -440,7 +440,7 @@ function OverridesSection() {
         <select value={filterEmp} onChange={(e) => setFilterEmp(e.target.value)} className="px-3 py-2 border border-border rounded-lg text-sm">
           <option value="">พนักงานทั้งหมด</option>
           {employees.map((emp) => (
-            <option key={emp.id} value={emp.id}>{emp.employee_code} · {emp.full_name}</option>
+            <option key={emp.id} value={emp.id}>{emp.employee_code} · {emp.full_name}{emp.nickname ? ` (${emp.nickname})` : ""}</option>
           ))}
         </select>
       </div>
@@ -465,7 +465,7 @@ function OverridesSection() {
             ) : items.map((o) => (
               <tr key={o.id} className="hover:bg-surface/50">
                 <td className="px-4 py-3 text-sm font-medium">{fmtDate(o.date)}</td>
-                <td className="px-4 py-3 text-sm">{o.employee?.full_name ?? empMap.get(o.employee_id)?.full_name ?? `#${o.employee_id}`}</td>
+                <td className="px-4 py-3 text-sm">{o.employee ? `${o.employee.full_name}${o.employee.nickname ? ` (${o.employee.nickname})` : ""}` : (empMap.get(o.employee_id)?.full_name ?? `#${o.employee_id}`)}</td>
                 <td className="px-4 py-3 text-sm">
                   {o.is_day_off
                     ? <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-xs">วันหยุด</span>

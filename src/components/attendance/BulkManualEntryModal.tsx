@@ -174,7 +174,7 @@ export default function BulkManualEntryModal({
               <option value="">— เลือกพนักงาน —</option>
               {filteredEmployees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
-                  {emp.employee_code} — {emp.first_name} {emp.last_name}
+                  {emp.employee_code} — {emp.first_name} {emp.last_name}{emp.nickname ? ` (${emp.nickname})` : ""}
                 </option>
               ))}
             </select>

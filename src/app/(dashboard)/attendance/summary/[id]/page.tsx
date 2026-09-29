@@ -14,6 +14,7 @@ interface DailyResponse {
     employee_code: string;
     first_name: string;
     last_name: string;
+    nickname?: string | null;
   };
   month: string;
   days: DailyEntry[];
@@ -101,7 +102,7 @@ export default function EmployeeDailySummaryPage() {
             <div>
               <div className="text-xs text-muted">พนักงาน</div>
               <div className="font-semibold">
-                {data.employee.first_name} {data.employee.last_name}{" "}
+                {data.employee.first_name} {data.employee.last_name}{data.employee.nickname ? ` (${data.employee.nickname})` : ""}{" "}
                 <span className="text-xs font-mono text-muted">({data.employee.employee_code})</span>
               </div>
             </div>

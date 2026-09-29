@@ -46,6 +46,7 @@ export interface LeaveRequest {
     employee_code: string;
     first_name: string;
     last_name: string;
+    nickname?: string | null;
   };
   leave_type?: LeaveType;
   reviewer?: { id: number; name: string } | null;
@@ -80,6 +81,7 @@ export interface SummaryRow {
     employee_code: string;
     first_name: string;
     last_name: string;
+    nickname?: string | null;
     department?: { id: number; name: string } | null;
   };
   total_days: number;

@@ -38,6 +38,10 @@ function todayStr() {
   return new Date().toISOString().substring(0, 10);
 }
 
+function empName(e: { first_name: string; last_name: string; nickname?: string | null }) {
+  return `${e.first_name} ${e.last_name}${e.nickname ? ` (${e.nickname})` : ""}`;
+}
+
 type EditTarget = {
   id: number;
   employeeId: number;
@@ -154,7 +158,7 @@ export default function AttendanceManagePage() {
     setEditTarget({
       id: entry.id,
       employeeId: row.employee.id,
-      employeeName: `${row.employee.first_name} ${row.employee.last_name}`,
+      employeeName: empName(row.employee),
       type,
       checked_at: entry.checked_at,
     });
@@ -385,7 +389,7 @@ export default function AttendanceManagePage() {
                 return (
                   <tr key={row.employee.id} className="border-b border-border hover:bg-gray-50">
                     <td className="px-4 py-3">
-                      <div className="font-medium">{row.employee.first_name} {row.employee.last_name}</div>
+                      <div className="font-medium">{row.employee.first_name} {row.employee.last_name}{row.employee.nickname ? ` (${row.employee.nickname})` : ""}</div>
                       <div className="text-xs text-muted">{row.employee.employee_code}</div>
                     </td>
                     <td className="px-4 py-3">
@@ -410,7 +414,7 @@ export default function AttendanceManagePage() {
                             <History className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => setDeleteTarget({ id: row.check_in!.id, employeeId: row.employee.id, employeeName: `${row.employee.first_name} ${row.employee.last_name}`, type: "check_in", checked_at: row.check_in!.checked_at })}
+                            onClick={() => setDeleteTarget({ id: row.check_in!.id, employeeId: row.employee.id, employeeName: empName(row.employee), type: "check_in", checked_at: row.check_in!.checked_at })}
                             className="p-1 text-red-600 hover:bg-red-50 rounded"
                             title="ลบ"
                           >
@@ -441,7 +445,7 @@ export default function AttendanceManagePage() {
                             <History className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => setDeleteTarget({ id: row.check_out!.id, employeeId: row.employee.id, employeeName: `${row.employee.first_name} ${row.employee.last_name}`, type: "check_out", checked_at: row.check_out!.checked_at })}
+                            onClick={() => setDeleteTarget({ id: row.check_out!.id, employeeId: row.employee.id, employeeName: empName(row.employee), type: "check_out", checked_at: row.check_out!.checked_at })}
                             className="p-1 text-red-600 hover:bg-red-50 rounded"
                             title="ลบ"
                           >
@@ -479,7 +483,7 @@ export default function AttendanceManagePage() {
               <div key={row.employee.id} className="px-4 py-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="font-medium text-sm">{row.employee.first_name} {row.employee.last_name}</div>
+                    <div className="font-medium text-sm">{row.employee.first_name} {row.employee.last_name}{row.employee.nickname ? ` (${row.employee.nickname})` : ""}</div>
                     <div className="text-xs text-muted">{row.employee.employee_code}{row.employee.department?.name ? ` · ${row.employee.department.name}` : ""}</div>
                   </div>
                   <Badge variant={ds.variant} label={ds.label} />
@@ -507,13 +511,13 @@ export default function AttendanceManagePage() {
                   {row.check_in && (
                     <>
                       <button onClick={() => openEdit(row, "check_in")} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Edit2 className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => setDeleteTarget({ id: row.check_in!.id, employeeId: row.employee.id, employeeName: `${row.employee.first_name} ${row.employee.last_name}`, type: "check_in", checked_at: row.check_in!.checked_at })} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setDeleteTarget({ id: row.check_in!.id, employeeId: row.employee.id, employeeName: empName(row.employee), type: "check_in", checked_at: row.check_in!.checked_at })} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                     </>
                   )}
                   {row.check_out && (
                     <>
                       <button onClick={() => openEdit(row, "check_out")} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Edit2 className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => setDeleteTarget({ id: row.check_out!.id, employeeId: row.employee.id, employeeName: `${row.employee.first_name} ${row.employee.last_name}`, type: "check_out", checked_at: row.check_out!.checked_at })} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setDeleteTarget({ id: row.check_out!.id, employeeId: row.employee.id, employeeName: empName(row.employee), type: "check_out", checked_at: row.check_out!.checked_at })} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                     </>
                   )}
                 </div>

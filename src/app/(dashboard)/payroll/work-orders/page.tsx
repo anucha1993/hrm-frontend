@@ -8,7 +8,7 @@ import { fmtMoney, fmtDate } from "@/lib/payroll";
 import { Plus, Loader2, Search, FileText } from "lucide-react";
 
 type RateItemBrief = { id: number; code: string; name: string; unit: "raft" | "meter"; work_type: string };
-type EmployeeBrief = { id: number; employee_code: string; first_name: string; last_name: string };
+type EmployeeBrief = { id: number; employee_code: string; first_name: string; last_name: string; nickname?: string | null };
 
 type ItemRow = {
   id: number;
@@ -158,7 +158,7 @@ export default function WorkOrdersPage() {
                       <div className="text-muted">{PERIOD_LABEL[a.period_type]}</div>
                     </td>
                     <td className="px-3 py-3 text-xs whitespace-nowrap font-medium">
-                      {a.team_leader ? `${a.team_leader.first_name} ${a.team_leader.last_name}` : "—"}
+                      {a.team_leader ? `${a.team_leader.first_name} ${a.team_leader.last_name}${a.team_leader.nickname ? ` (${a.team_leader.nickname})` : ""}` : "—"}
                     </td>
                     <td className="px-3 py-3 text-xs">{a.location_name ?? "—"}</td>
                     <td className="px-3 py-3">

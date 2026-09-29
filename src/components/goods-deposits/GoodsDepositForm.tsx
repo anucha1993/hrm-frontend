@@ -167,7 +167,7 @@ export default function GoodsDepositForm({ initial }: Props) {
               <label className="block text-xs font-medium text-muted mb-1">พนักงาน *</label>
               {readOnly ? (
                 <div className="px-3 py-2.5 rounded-xl border border-border text-sm bg-surface">
-                  {employee ? `${employee.employee_code} - ${employee.first_name} ${employee.last_name}` : "-"}
+                  {employee ? `${employee.employee_code} - ${employee.first_name} ${employee.last_name}${employee.nickname ? ` (${employee.nickname})` : ""}` : "-"}
                 </div>
               ) : (
                 <EmployeeCombobox employees={employees} value={employeeId} onChange={setEmployeeId} />

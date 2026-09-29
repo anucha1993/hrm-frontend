@@ -924,6 +924,7 @@ function PrintModal({ task, onClose }: { task: Task; onClose: () => void }) {
                     <div key={a.id}>
                       <div className="mb-1 text-xs font-medium">
                         {a.employee?.first_name} {a.employee?.last_name}
+                        {a.employee?.nickname && ` (${a.employee.nickname})`}
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         {a.before_photo_url ? (

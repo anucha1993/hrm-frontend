@@ -235,7 +235,7 @@ function ItemRow({
     <tr className="border-b border-border last:border-0 hover:bg-surface/50">
       <td className="px-3 py-2 font-medium text-foreground">{item.room?.room_no ?? "-"}</td>
       <td className="px-3 py-2 text-foreground">
-        {item.employee ? `${item.employee.employee_code} - ${item.employee.first_name} ${item.employee.last_name}` : <span className="text-muted">ว่าง</span>}
+        {item.employee ? `${item.employee.employee_code} - ${item.employee.first_name} ${item.employee.last_name}${item.employee.nickname ? ` (${item.employee.nickname})` : ""}` : <span className="text-muted">ว่าง</span>}
       </td>
       <td className="px-3 py-2 text-right text-muted">{thb(item.meter_start)}</td>
       <td className="px-3 py-2 text-right">

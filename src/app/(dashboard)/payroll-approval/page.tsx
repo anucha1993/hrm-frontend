@@ -235,7 +235,7 @@ export default function PayrollApprovalPage() {
                         <td className="px-3 py-3 text-xs">{s.period?.name}</td>
                         <td className="px-3 py-3">
                           <div className="font-medium">
-                            {s.employee?.first_name} {s.employee?.last_name}
+                            {s.employee?.first_name} {s.employee?.last_name}{s.employee?.nickname ? ` (${s.employee.nickname})` : ""}
                           </div>
                           <div className="text-xs text-muted font-mono">{s.employee?.employee_code}</div>
                         </td>
