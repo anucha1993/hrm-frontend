@@ -663,7 +663,7 @@ function PrintSummaryModal({ wo, canViewMoney, onClose }: { wo: WorkOrderDetail;
 
         {/* Printable area */}
         <div className="print-area p-8 text-[13px] text-gray-900">
-          <div className="mb-2">
+          {/* <div className="mb-2">
             <div className="flex items-center gap-3">
               <div className="text-xl font-bold">ใบจ่ายงาน {wo.code}</div>
               {overallMet !== null && <StatusBadge met={overallMet} big />}
@@ -675,7 +675,7 @@ function PrintSummaryModal({ wo, canViewMoney, onClose }: { wo: WorkOrderDetail;
               <span className="ml-auto text-gray-600">{periodLabel[wo.period_type] ?? wo.period_type} · บันทึก {wo.daily_entries.length} วัน</span>
             </div>
             {wo.note && <div className="text-sm text-gray-600 mt-0.5">หมายเหตุ: {wo.note}</div>}
-          </div>
+          </div> */}
 
           {/* รายการงาน — เขียนเป็นบรรทัดคำนวณตามแบบฟอร์มกระดาษจริง: ชื่อรายการ ราคา x จำนวน = รวม (ไม่มีกรอบตาราง) */}
           {(() => {
@@ -835,7 +835,7 @@ function PrintSummaryModal({ wo, canViewMoney, onClose }: { wo: WorkOrderDetail;
                 )}
 
                 {/* ยอดรวมเป็นเงิน - ค่าหัก = ยอดสุทธิ (ตามรูปแบบใบสรุปยอดกระดาษ) */}
-                <div className="flex justify-end mb-6">
+                {/* <div className="flex justify-end mb-6">
                   <div className="w-80 text-sm space-y-1">
                     <div className="flex justify-between">
                       <span>ยอดรวมเป็นเงิน</span>
@@ -852,13 +852,13 @@ function PrintSummaryModal({ wo, canViewMoney, onClose }: { wo: WorkOrderDetail;
                       <span className="font-bold text-lg">{fmtMoney(wo.total_amount)} บาท</span>
                     </div>
                   </div>
-                </div>
+                </div> */}
               </>
             );
           })()}
 
           {/* ลายเซ็น */}
-          <div className="grid grid-cols-3 gap-8 mt-12">
+          {/* <div className="grid grid-cols-3 gap-8 mt-12">
             <div className="text-center">
               <div className="border-t border-gray-700 pt-1">ผู้จ่ายงาน</div>
               <div className="text-xs text-gray-600 mt-1">วันที่ ........./........./.........</div>
@@ -871,7 +871,7 @@ function PrintSummaryModal({ wo, canViewMoney, onClose }: { wo: WorkOrderDetail;
               <div className="border-t border-gray-700 pt-1">ผู้ตรวจสอบ</div>
               <div className="text-xs text-gray-600 mt-1">วันที่ ........./........./.........</div>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>
