@@ -8,6 +8,7 @@ import Topbar from "@/components/Topbar";
 import Badge from "@/components/Badge";
 import EmployeeCombobox from "@/components/EmployeeCombobox";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import type { Employee, GoodsDepositSlip, GoodsDepositStatus, Paginated } from "@/lib/types";
 
 const STATUS_LABEL: Record<GoodsDepositStatus, { label: string; variant: "success" | "warning" | "danger" | "default" }> = {
@@ -41,13 +42,18 @@ export default function GoodsDepositForm({ initial }: Props) {
   const isEdit = !!initial;
   // ถ้าตัดยอด/ยกเลิก/ยกเว้นไปแล้ว ให้เปิดดูได้อย่างเดียว แก้ไขไม่ได้
   const readOnly = isEdit && initial?.status !== "pending";
+  const { hasPermission } = useAuth();
+  // ไม่มีสิทธิ์ลงย้อนหลัง → ใบใหม่เลือกวันที่ได้ตั้งแต่วันนี้ (backend เช็คซ้ำอีกชั้น)
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const minDate = !isEdit && !hasPermission("goods_deposits.backdate") ? todayStr : undefined;
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState<string>(
     initial?.employee_id ? String(initial.employee_id) : ""
   );
   const [depositDate, setDepositDate] = useState<string>(
-    initial?.deposit_date ?? new Date().toISOString().slice(0, 10)
+    initial?.deposit_date ?? todayStr
   );
   const [note, setNote] = useState<string>(initial?.note ?? "");
   const [rows, setRows] = useState<ItemRow[]>(
@@ -177,11 +183,13 @@ export default function GoodsDepositForm({ initial }: Props) {
               <label className="block text-xs font-medium text-muted mb-1">วันที่หยิบของ *</label>
               <input
                 type="date"
+                min={minDate}
                 value={depositDate}
                 disabled={readOnly}
                 onChange={(e) => setDepositDate(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-border text-sm bg-white disabled:bg-surface disabled:text-muted"
               />
+              {minDate && <p className="text-xs text-muted mt-1">ไม่มีสิทธิ์ลงย้อนหลัง — เลือกได้ตั้งแต่วันนี้เป็นต้นไป</p>}
             </div>
           </div>
           <div>

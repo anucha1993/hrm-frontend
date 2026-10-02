@@ -196,8 +196,8 @@ export default function WorkOrderForm({
   const router = useRouter();
   const { hasPermission } = useAuth();
   const canViewMoney = hasPermission(["payroll.view", "payroll.config"]);
-  // ไม่มีสิทธิ์ลงงานย้อนหลัง → ใบงานใหม่ต้องสิ้นสุดตั้งแต่วันนี้ (backend เช็คซ้ำอีกชั้น)
-  const minEndDate = !isEdit && !hasPermission("production.backdate") ? today() : undefined;
+  // ไม่มีสิทธิ์ลงงานย้อนหลัง → ใบงานใหม่เลือกวันที่ได้ตั้งแต่วันนี้ (backend เช็คซ้ำอีกชั้น)
+  const minDate = !isEdit && !hasPermission("production.backdate") ? today() : undefined;
   const [form, setForm] = useState<WorkOrderFormInit>({
     ...initial,
     extras: (initial.extras ?? []).filter((e) => !e.deduction_type),
@@ -350,6 +350,8 @@ export default function WorkOrderForm({
 
   function applyPeriodType(type: WorkOrderFormInit["period_type"]) {
     const dates = calcPeriodDates(type);
+    // ไม่มีสิทธิ์ลงย้อนหลัง → รอบที่เริ่มไปแล้วให้เริ่มที่วันนี้แทน
+    if (dates && minDate && dates.start < minDate) dates.start = minDate;
     setForm((f) => ({
       ...f,
       period_type: type,
@@ -742,16 +744,17 @@ export default function WorkOrderForm({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="วันเริ่มต้น *">
               <input type="date" required disabled={readOnly} className="payroll-input"
+                min={minDate}
                 value={form.start_date}
                 onChange={(e) => setForm({ ...form, start_date: e.target.value, period_type: "custom" })} />
             </Field>
             <Field label="วันสิ้นสุด *">
               <input type="date" required disabled={readOnly} className="payroll-input"
-                min={minEndDate}
+                min={minDate && form.start_date > minDate ? form.start_date : minDate}
                 value={form.end_date}
                 onChange={(e) => setForm({ ...form, end_date: e.target.value, period_type: "custom" })} />
-              {minEndDate && (
-                <span className="text-xs text-muted mt-1 block">ไม่มีสิทธิ์ลงงานย้อนหลัง — วันสิ้นสุดต้องเป็นวันนี้ขึ้นไป</span>
+              {minDate && (
+                <span className="text-xs text-muted mt-1 block">ไม่มีสิทธิ์ลงงานย้อนหลัง — เลือกได้ตั้งแต่วันนี้เป็นต้นไป</span>
               )}
             </Field>
           </div>

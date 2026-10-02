@@ -29,10 +29,16 @@ type Form = {
   employee_id: string;
 };
 
+// วันนี้ตามเวลาเครื่อง (ไทย) — toISOString() เป็น UTC ช่วงเช้ามืดจะได้เป็นเมื่อวาน
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 const empty: Form = {
   leave_type_id: "",
-  start_date: new Date().toISOString().slice(0, 10),
-  end_date: new Date().toISOString().slice(0, 10),
+  start_date: localToday(),
+  end_date: localToday(),
   is_half_day: false,
   half_day_period: "morning",
   reason: "",
@@ -44,6 +50,8 @@ const empty: Form = {
 export default function MyLeavePage() {
   const { hasPermission } = useAuth();
   const canFileForOthers = hasPermission("leave.config") || hasPermission("leave.create_for_others");
+  // ไม่มีสิทธิ์ยื่นลาย้อนหลัง → เลือกวันที่ได้ตั้งแต่วันนี้ (backend เช็คซ้ำอีกชั้น)
+  const minDate = hasPermission("leave.backdate") ? undefined : localToday();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);
@@ -347,11 +355,13 @@ export default function MyLeavePage() {
                   <input
                     type="date"
                     className="payroll-input"
+                    min={minDate}
                     value={form.start_date}
                     onChange={(e) =>
                       setForm({ ...form, start_date: e.target.value, end_date: form.is_half_day ? e.target.value : form.end_date })
                     }
                   />
+                  {minDate && <span className="text-xs text-muted mt-1 block">ไม่มีสิทธิ์ยื่นลาย้อนหลัง — เลือกได้ตั้งแต่วันนี้</span>}
                 </Field>
                 {form.is_half_day ? (
                   <Field label="ช่วง">
@@ -369,6 +379,7 @@ export default function MyLeavePage() {
                     <input
                       type="date"
                       className="payroll-input"
+                      min={form.start_date || minDate}
                       value={form.end_date}
                       onChange={(e) => setForm({ ...form, end_date: e.target.value })}
                     />
