@@ -119,8 +119,10 @@ function groupDeductions(extras: ExtraRow[]): DeductionRow[] {
   return rows;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-const ymd = (d: Date) => d.toISOString().slice(0, 10);
+// ใช้วันที่ตามเวลาเครื่อง (ไทย) — toISOString() เป็น UTC ทำให้วันเพี้ยนไป 1 วัน (เช่น 6 กลายเป็น 5)
+const ymd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const today = () => ymd(new Date());
 
 export const blankForm: WorkOrderFormInit = {
   start_date: today(),
@@ -194,6 +196,8 @@ export default function WorkOrderForm({
   const router = useRouter();
   const { hasPermission } = useAuth();
   const canViewMoney = hasPermission(["payroll.view", "payroll.config"]);
+  // ไม่มีสิทธิ์ลงงานย้อนหลัง → ใบงานใหม่ต้องสิ้นสุดตั้งแต่วันนี้ (backend เช็คซ้ำอีกชั้น)
+  const minEndDate = !isEdit && !hasPermission("production.backdate") ? today() : undefined;
   const [form, setForm] = useState<WorkOrderFormInit>({
     ...initial,
     extras: (initial.extras ?? []).filter((e) => !e.deduction_type),
@@ -743,8 +747,12 @@ export default function WorkOrderForm({
             </Field>
             <Field label="วันสิ้นสุด *">
               <input type="date" required disabled={readOnly} className="payroll-input"
+                min={minEndDate}
                 value={form.end_date}
                 onChange={(e) => setForm({ ...form, end_date: e.target.value, period_type: "custom" })} />
+              {minEndDate && (
+                <span className="text-xs text-muted mt-1 block">ไม่มีสิทธิ์ลงงานย้อนหลัง — วันสิ้นสุดต้องเป็นวันนี้ขึ้นไป</span>
+              )}
             </Field>
           </div>
         </div>

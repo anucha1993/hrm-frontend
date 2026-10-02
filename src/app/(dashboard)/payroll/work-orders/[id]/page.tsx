@@ -184,6 +184,12 @@ type EntryDraft = {
 
 function DailyEntriesTab({ data, onChanged }: { data: WorkOrderDetail; onChanged: () => void }) {
   const readOnly = data.status === "paid";
+  const { hasPermission } = useAuth();
+  // ไม่มีสิทธิ์ลงงานย้อนหลัง → บันทึกผลได้ตั้งแต่วันนี้ (backend เช็คซ้ำอีกชั้น)
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const woStart = data.start_date.slice(0, 10);
+  const minWorkDate = !hasPermission("production.backdate") && todayStr > woStart ? todayStr : woStart;
   const [draft, setDraft] = useState<EntryDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -192,7 +198,7 @@ function DailyEntriesTab({ data, onChanged }: { data: WorkOrderDetail; onChanged
   function startNew() {
     const items: Record<number, { assigned: string; actual: string }> = {};
     data.items.forEach((it) => { items[it.id] = { assigned: "0", actual: "0" }; });
-    setDraft({ work_date: data.start_date.slice(0, 10), note: "", items });
+    setDraft({ work_date: minWorkDate, note: "", items });
     setErr(null);
   }
   function startEdit(entry: DailyEntry) {
@@ -277,7 +283,7 @@ function DailyEntriesTab({ data, onChanged }: { data: WorkOrderDetail; onChanged
               <label className="block">
                 <span className="text-xs font-medium text-muted mb-1 block">วันที่ *</span>
                 <input type="date" className="payroll-input"
-                  min={data.start_date.slice(0, 10)} max={data.end_date.slice(0, 10)}
+                  min={draft.id && draft.work_date < minWorkDate ? undefined : minWorkDate} max={data.end_date.slice(0, 10)}
                   value={draft.work_date} onChange={(e) => setDraft({ ...draft, work_date: e.target.value })} />
               </label>
               <label className="block md:col-span-2">
