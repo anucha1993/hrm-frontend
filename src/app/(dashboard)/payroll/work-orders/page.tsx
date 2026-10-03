@@ -6,7 +6,7 @@ import Topbar from "@/components/Topbar";
 import { apiFetch } from "@/lib/api";
 import { fmtMoney, fmtDate } from "@/lib/payroll";
 import { categoryLabel } from "@/lib/productionRates";
-import { Plus, Loader2, Search, FileText } from "lucide-react";
+import { Plus, Loader2, Search, FileText, Link2 } from "lucide-react";
 
 type RateItemBrief = { id: number; code: string; name: string; unit: "raft" | "meter"; work_type: string; category?: string | null };
 type EmployeeBrief = { id: number; employee_code: string; first_name: string; last_name: string; nickname?: string | null };
@@ -29,6 +29,7 @@ type WorkOrder = {
   status: "draft" | "in_progress" | "completed" | "paid";
   total_amount: string;
   location_name: string | null;
+  batch_code?: string | null;
   items_count: number;
   members_count: number;
   daily_entries_count: number;
@@ -84,14 +85,55 @@ const wtIndex = (wt: string) => {
   return i < 0 ? 999 : i;
 };
 
+// ลอตผลิต — ใบงานที่เชื่อมกัน (batch_code เดียวกัน) ต้องแสดงคู่กันเสมอ
+// เรียงใหม่ให้สมาชิกลอตเดียวกันอยู่ติดกัน (ตามตำแหน่งของใบแรกที่เจอ)
+function sortByBatch(orders: WorkOrder[]): WorkOrder[] {
+  const out: WorkOrder[] = [];
+  const done = new Set<string>();
+  for (const wo of orders) {
+    if (!wo.batch_code) { out.push(wo); continue; }
+    if (done.has(wo.batch_code)) continue;
+    done.add(wo.batch_code);
+    out.push(...orders.filter((x) => x.batch_code === wo.batch_code).sort((a, b) => a.code.localeCompare(b.code)));
+  }
+  return out;
+}
+
+// ช่วงวันที่รวมของทั้งลอต (เริ่มเร็วสุด – จบช้าสุด) — ใช้จัดสมาชิกลอตให้อยู่ช่วงวันที่เดียวกัน
+function batchRanges(orders: WorkOrder[]): Map<string, { start: string; end: string }> {
+  const m = new Map<string, { start: string; end: string }>();
+  for (const wo of orders) {
+    if (!wo.batch_code) continue;
+    const s = wo.start_date.slice(0, 10);
+    const e = wo.end_date.slice(0, 10);
+    const r = m.get(wo.batch_code);
+    if (!r) m.set(wo.batch_code, { start: s, end: e });
+    else { if (s < r.start) r.start = s; if (e > r.end) r.end = e; }
+  }
+  return m;
+}
+
+function BatchBadge({ code }: { code: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 ml-2 px-1.5 border border-gray-300 rounded text-[11px] text-gray-600 bg-white whitespace-nowrap" title="ลอตผลิต — ใบงานชุดเดียวกัน แบ่งทำหลายทีม">
+      <Link2 className="w-3 h-3" />{code}
+    </span>
+  );
+}
+
 function buildDateBlocks(orders: WorkOrder[]): DateBlock[] {
   const dates = new Map<string, DateBlock>();
+  const ranges = batchRanges(orders);
   for (const wo of orders) {
-    const start = wo.start_date.slice(0, 10);
-    const end = wo.end_date.slice(0, 10);
-    const dKey = `${start}|${end}`;
+    const br = wo.batch_code ? ranges.get(wo.batch_code) : undefined;
+    const start = br?.start ?? wo.start_date.slice(0, 10);
+    const end = br?.end ?? wo.end_date.slice(0, 10);
+    // จัดกลุ่มตาม "วันสิ้นสุด" (วันตัดรอบเดียวกัน = รอบจ่ายเดียวกัน) — ใบที่เริ่มต่างกันวันสองวันจะได้รวมเป็นก้อนเดียว
+    // วันเริ่มของก้อน = วันเริ่มเร็วสุดในก้อน
+    const dKey = end;
     let d = dates.get(dKey);
     if (!d) { d = { key: dKey, start, end, groups: [] }; dates.set(dKey, d); }
+    else if (start < d.start) d.start = start;
 
     for (const item of wo.items ?? []) {
       const cat = item.rate_item?.category ?? null;
@@ -112,7 +154,7 @@ function buildDateBlocks(orders: WorkOrder[]): DateBlock[] {
     }
   }
   const result = [...dates.values()].filter((d) => d.groups.length > 0);
-  result.sort((a, b) => b.start.localeCompare(a.start) || b.end.localeCompare(a.end));
+  result.sort((a, b) => b.end.localeCompare(a.end));
   for (const d of result) {
     d.groups.sort((a, b) => a.order - b.order);
     for (const g of d.groups) {
@@ -168,7 +210,8 @@ export default function WorkOrdersPage() {
   async function load(range: { from: string; to: string } = { from, to }) {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ per_page: "100" });
+      // with_batch → ใบงานที่เชื่อมลอตผลิตเดียวกันจะถูกดึงมาด้วยเสมอ
+      const params = new URLSearchParams({ per_page: "100", with_batch: "1" });
       if (range.from) params.set("from", range.from);
       if (range.to) params.set("to", range.to);
       if (status) params.set("status", status);
@@ -194,7 +237,8 @@ export default function WorkOrdersPage() {
     () => items.reduce((a, b) => a + Number(b.total_amount || 0), 0),
     [items]
   );
-  const dateBlocks = useMemo(() => buildDateBlocks(items), [items]);
+  const orderedItems = useMemo(() => sortByBatch(items), [items]);
+  const dateBlocks = useMemo(() => buildDateBlocks(orderedItems), [orderedItems]);
 
   function toggle(key: string) {
     setExpanded((prev) => {
@@ -340,6 +384,10 @@ export default function WorkOrdersPage() {
                                     <td className="pl-8 pr-2 py-1">
                                       <Link href={`/payroll/work-orders/${wo.id}`} className="font-mono text-primary-600 hover:underline">{wo.code}</Link>
                                       <span className="ml-2">{leaderLabel(wo.team_leader)}</span>
+                                      {wo.batch_code && <BatchBadge code={wo.batch_code} />}
+                                      {(wo.start_date.slice(0, 10) !== d.start || wo.end_date.slice(0, 10) !== d.end) && (
+                                        <span className="ml-2 text-xs text-gray-500">({fmtDate(wo.start_date)} – {fmtDate(wo.end_date)})</span>
+                                      )}
                                     </td>
                                     <td className="px-2 py-1 text-right">{fmtQty(Number(item.actual_qty_total))}</td>
                                     <td className="px-2 py-1 text-right">{fmtQty(Number(item.target_qty))}</td>
@@ -380,10 +428,13 @@ export default function WorkOrdersPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((a) => (
-                  <tr key={a.id} className="border-b border-border last:border-0 hover:bg-gray-50/50">
-                    <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">
+                {orderedItems.map((a, ai) => {
+                  const prevSame = !!a.batch_code && orderedItems[ai - 1]?.batch_code === a.batch_code;
+                  return (
+                  <tr key={a.id} className={`border-border last:border-0 hover:bg-gray-50/50 ${prevSame ? "" : "border-t"} ${a.batch_code ? "bg-gray-50/40" : ""}`}>
+                    <td className={`px-3 py-3 text-xs font-mono whitespace-nowrap ${a.batch_code ? "border-l-4 border-l-gray-400" : ""}`}>
                       <FileText className="w-3.5 h-3.5 inline mr-1 text-primary-500" />{a.code}
+                      {a.batch_code && <div className="mt-1 -ml-2"><BatchBadge code={a.batch_code} /></div>}
                     </td>
                     <td className="px-3 py-3 text-xs whitespace-nowrap">
                       <div>{fmtDate(a.start_date)} → {fmtDate(a.end_date)}</div>
@@ -421,7 +472,8 @@ export default function WorkOrdersPage() {
                       </Link>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
