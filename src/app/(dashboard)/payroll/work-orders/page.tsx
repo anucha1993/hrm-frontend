@@ -379,22 +379,31 @@ export default function WorkOrdersPage() {
                                   <td className="px-2 py-1.5 text-center text-gray-600">{unit}</td>
                                   <td className="px-2 py-1.5 text-right">{fmtMoney(r.amount)}</td>
                                 </tr>
-                                {open && r.lines.map(({ wo, item }) => (
-                                  <tr key={`${r.key}|${item.id}`} className="bg-gray-50 text-sm text-gray-600">
-                                    <td className="pl-8 pr-2 py-1">
-                                      <Link href={`/payroll/work-orders/${wo.id}`} className="font-mono text-primary-600 hover:underline">{wo.code}</Link>
-                                      <span className="ml-2">{leaderLabel(wo.team_leader)}</span>
-                                      {wo.batch_code && <BatchBadge code={wo.batch_code} />}
-                                      {(wo.start_date.slice(0, 10) !== d.start || wo.end_date.slice(0, 10) !== d.end) && (
-                                        <span className="ml-2 text-xs text-gray-500">({fmtDate(wo.start_date)} – {fmtDate(wo.end_date)})</span>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1 text-right">{fmtQty(Number(item.actual_qty_total))}</td>
-                                    <td className="px-2 py-1 text-right">{fmtQty(Number(item.target_qty))}</td>
-                                    <td className="px-2 py-1 text-center">{unit}</td>
-                                    <td className="px-2 py-1 text-right">{fmtMoney(item.total_amount)}</td>
-                                  </tr>
-                                ))}
+                                {open && r.lines.map(({ wo, item }, li) => {
+                                  // ใบงานเดียวอาจมีหลายรายการในแถวเดียวกัน (เช่น เสาเข็มหลายขนาด) — แสดงหัวใบงานครั้งเดียว แล้วไล่ชื่อรายการ
+                                  const firstOfWo = r.lines[li - 1]?.wo.id !== wo.id;
+                                  return (
+                                    <tr key={`${r.key}|${item.id}`} className="bg-gray-50 text-sm text-gray-600">
+                                      <td className="pl-8 pr-2 py-1">
+                                        {firstOfWo && (
+                                          <div className="mb-0.5">
+                                            <Link href={`/payroll/work-orders/${wo.id}`} className="font-mono text-primary-600 hover:underline">{wo.code}</Link>
+                                            <span className="ml-2">{leaderLabel(wo.team_leader)}</span>
+                                            {wo.batch_code && <BatchBadge code={wo.batch_code} />}
+                                            {(wo.start_date.slice(0, 10) !== d.start || wo.end_date.slice(0, 10) !== d.end) && (
+                                              <span className="ml-2 text-xs text-gray-500">({fmtDate(wo.start_date)} – {fmtDate(wo.end_date)})</span>
+                                            )}
+                                          </div>
+                                        )}
+                                        <div className="pl-4 text-gray-700">· {item.rate_item?.name ?? "—"}</div>
+                                      </td>
+                                      <td className="px-2 py-1 text-right align-bottom">{fmtQty(Number(item.actual_qty_total))}</td>
+                                      <td className="px-2 py-1 text-right align-bottom">{fmtQty(Number(item.target_qty))}</td>
+                                      <td className="px-2 py-1 text-center align-bottom">{unit}</td>
+                                      <td className="px-2 py-1 text-right align-bottom">{fmtMoney(item.total_amount)}</td>
+                                    </tr>
+                                  );
+                                })}
                               </Fragment>
                             );
                           })
