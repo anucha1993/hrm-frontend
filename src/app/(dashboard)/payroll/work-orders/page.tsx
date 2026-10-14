@@ -14,6 +14,7 @@ type EmployeeBrief = { id: number; employee_code: string; first_name: string; la
 type ItemRow = {
   id: number;
   production_rate_item_id: number;
+  product_name?: string | null;
   target_qty: string;
   actual_qty_total: string;
   total_amount: string;
@@ -395,7 +396,7 @@ export default function WorkOrdersPage() {
                                             )}
                                           </div>
                                         )}
-                                        <div className="pl-4 text-gray-700">· {item.rate_item?.name ?? "—"}</div>
+                                        <div className="pl-4 text-gray-700">· {item.rate_item?.name ?? "—"}{item.product_name && <span className="text-gray-500"> ({item.product_name})</span>}</div>
                                       </td>
                                       <td className="px-2 py-1 text-right align-bottom">{fmtQty(Number(item.actual_qty_total))}</td>
                                       <td className="px-2 py-1 text-right align-bottom">{fmtQty(Number(item.target_qty))}</td>
@@ -457,7 +458,7 @@ export default function WorkOrdersPage() {
                       <div className="text-xs text-muted">{a.items_count} รายการ</div>
                       {(a.items ?? []).slice(0, 2).map((it) => (
                         <div key={it.id} className="text-xs">
-                          <span className="font-medium">{it.rate_item?.name}</span>
+                          <span className="font-medium">{it.rate_item?.name}</span>{it.product_name && <span className="text-muted"> ({it.product_name})</span>}
                           <span className="text-muted"> · {Number(it.actual_qty_total)}/{Number(it.target_qty)}</span>
                         </div>
                       ))}

@@ -38,6 +38,7 @@ type EmployeeBrief = {
 export type ItemRow = {
   id?: number;
   production_rate_item_id: number | "";
+  product_name?: string; // ชื่อสินค้าที่ผลิตจริง (ระบุเพิ่มใต้รายการเรท)
   target_qty: string;
   rate_at_target_override: string;
   rate_below_target_override: string;
@@ -518,6 +519,7 @@ export default function WorkOrderForm({
           target_qty: Number(it.target_qty || 0),
           rate_at_target_override: it.rate_at_target_override === "" ? null : Number(it.rate_at_target_override),
           rate_below_target_override: it.rate_below_target_override === "" ? null : Number(it.rate_below_target_override),
+          product_name: it.product_name?.trim() || null,
         })),
         members: form.members
           .filter((m) => m.employee_id && m.employee_id !== form.team_leader_id)
@@ -878,6 +880,11 @@ export default function WorkOrderForm({
                           }}
                           onPickAll={(picked) => addItemsFromGroup(idx, picked)}
                         />
+                        <input type="text" disabled={readOnly} maxLength={255}
+                          value={item.product_name ?? ""}
+                          onChange={(e) => updateItem(idx, { product_name: e.target.value })}
+                          placeholder="ระบุชื่อสินค้า เช่น เสาเข็มหกเหลี่ยม 6 เมตร"
+                          className="mt-1.5 w-full min-w-[220px] px-3 py-1.5 rounded-lg border border-border text-sm bg-white disabled:bg-surface disabled:text-muted" />
                       </td>
                       <td className="px-3 py-2 text-xs">
                         {rate ? (

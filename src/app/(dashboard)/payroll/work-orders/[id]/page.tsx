@@ -30,6 +30,12 @@ type DailyEntry = {
 
 type LinkedWorkOrder = LinkedWorkOrderBrief;
 
+// ชื่อรายการ + ชื่อสินค้าที่ระบุเพิ่ม เช่น "อัดแรง ยก (เสาเข็มหกเหลี่ยม 6 เมตร)"
+const itemLabel = (it: { product_name?: string | null; rate_item?: { name: string } | null }) => {
+  const name = it.rate_item?.name ?? "—";
+  return it.product_name ? `${name} (${it.product_name})` : name;
+};
+
 type WorkOrderDetail = {
   id: number;
   code: string;
@@ -48,6 +54,7 @@ type WorkOrderDetail = {
   items: Array<{
     id: number;
     production_rate_item_id: number;
+    product_name?: string | null;
     target_qty: string;
     actual_qty_total: string;
     rate_at_target_override: string | null;
@@ -107,6 +114,7 @@ export default function EditWorkOrderPage() {
     items: data.items.map<ItemRow>((it) => ({
       id: it.id,
       production_rate_item_id: it.production_rate_item_id,
+      product_name: it.product_name ?? "",
       target_qty: String(it.target_qty),
       rate_at_target_override: it.rate_at_target_override ?? "",
       rate_below_target_override: it.rate_below_target_override ?? "",
@@ -316,7 +324,7 @@ function DailyEntriesTab({ data, onChanged }: { data: WorkOrderDetail; onChanged
                   return (
                     <tr key={it.id} className="border-b border-border last:border-0">
                       <td className="px-3 py-2">
-                        <div className="font-medium">{it.rate_item?.name ?? "—"}</div>
+                        <div className="font-medium">{itemLabel(it)}</div>
                         <div className="text-xs text-muted">
                           เป้า {target} / สั่งไปแล้ว {assignedSoFar} / ผลิตสะสม {Number(it.actual_qty_total)}
                         </div>
@@ -397,7 +405,7 @@ function DailyEntriesTab({ data, onChanged }: { data: WorkOrderDetail; onChanged
                           if (!woItem || (assigned === 0 && actual === 0)) return null;
                           return (
                             <div key={ei.id}>
-                              <span className="font-medium">{woItem.rate_item?.name}</span>:{" "}
+                              <span className="font-medium">{itemLabel(woItem)}</span>:{" "}
                               <span className="text-muted">สั่ง</span>{" "}
                               <span className="font-semibold text-blue-700">{assigned}</span>{" / "}
                               <span className="text-muted">จริง</span>{" "}
@@ -527,7 +535,7 @@ function PrintDailyOrderModal({ wo, entry, onClose }: { wo: WorkOrderDetail; ent
                 return (
                   <tr key={it.id}>
                     <td className="border border-gray-700 px-2 py-1 text-center">{idx + 1}</td>
-                    <td className="border border-gray-700 px-2 py-1">{it.rate_item?.name ?? "—"}</td>
+                    <td className="border border-gray-700 px-2 py-1">{itemLabel(it)}</td>
                     <td className="border border-gray-700 px-2 py-1 text-center">{it.rate_item?.unit ?? "-"}</td>
                     <td className="border border-gray-700 px-2 py-1 text-right">{Number(it.target_qty)}</td>
                     <td className="border border-gray-700 px-2 py-1 text-right font-semibold">{assigned > 0 ? assigned : ""}</td>
@@ -703,7 +711,7 @@ function PrintSummaryModal({ wo, canViewMoney, onClose }: { wo: WorkOrderDetail;
                   <div className="space-y-0.5 pl-2">
                     {g.items.map((it) => (
                       <div key={it.id} className="flex items-baseline gap-2">
-                        <span className="min-w-[220px]">{it.rate_item?.name ?? "—"}</span>
+                        <span className="min-w-[220px]">{itemLabel(it)}</span>
                         <span>{Number(it.actual_qty_total)} {it.rate_item?.unit === "raft" ? "แพ" : it.rate_item?.unit === "meter" ? "เมตร" : ""}</span>
                         {canViewMoney && (
                           <>
