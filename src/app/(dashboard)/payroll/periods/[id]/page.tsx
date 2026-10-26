@@ -71,6 +71,7 @@ export default function PayrollPeriodDetailPage() {
   const [bulkErr, setBulkErr] = useState<string | null>(null);
   const [slipQuery, setSlipQuery] = useState("");
   const [slipStatusFilter, setSlipStatusFilter] = useState("");
+  const [slipDeptFilter, setSlipDeptFilter] = useState("");
 
   const canCompute = hasPermission("payroll.compute");
   const canApproveL1 = hasPermission("payroll.approve_l1");
@@ -171,13 +172,33 @@ export default function PayrollPeriodDetailPage() {
     const q = slipQuery.trim().toLowerCase();
     return slips.filter((s) => {
       if (slipStatusFilter && s.status !== slipStatusFilter) return false;
+      if (slipDeptFilter && String(s.employee?.department?.id ?? "none") !== slipDeptFilter) return false;
       if (q) {
         const hay = `${s.employee?.employee_code ?? ""} ${s.employee?.first_name ?? ""} ${s.employee?.last_name ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [slips, slipQuery, slipStatusFilter]);
+  }, [slips, slipQuery, slipStatusFilter, slipDeptFilter]);
+
+  // แผนกที่มีสลิปอยู่ในงวดนี้ (พร้อมจำนวนคน) — ใช้กรอง/เลือกทั้งแผนกเพื่อลบออกจากงวด
+  const slipDepartments = useMemo(() => {
+    const m = new Map<string, { key: string; name: string; count: number }>();
+    slips.forEach((s) => {
+      const key = String(s.employee?.department?.id ?? "none");
+      const name = s.employee?.department?.name ?? "ไม่ระบุแผนก";
+      const d = m.get(key) ?? { key, name, count: 0 };
+      d.count++;
+      m.set(key, d);
+    });
+    return Array.from(m.values()).sort((a, b) => a.name.localeCompare(b.name, "th"));
+  }, [slips]);
+
+  async function deleteSelectedSlips() {
+    if (selectedSlips.length === 0) return;
+    if (!confirm(`ลบสลิป ${selectedSlips.length} รายการออกจากงวดนี้?\n\nรายการหักอัตโนมัติ (มัดจำของใช้ / ค่าไฟ-ค่าห้อง / ค่าคอม) ในสลิปเหล่านี้จะถูกคืนเป็น "รอตัด" เพื่อให้งวดที่ถูกต้องดึงไปตัดได้`)) return;
+    await bulkAction("delete");
+  }
 
   const filteredTotals = useMemo(() => {
     return filteredSlips.reduce(
@@ -323,7 +344,12 @@ export default function PayrollPeriodDetailPage() {
               )}
               {canCompute && (
                 <BulkBtn onClick={() => bulkAction("cancel", { note: prompt("เหตุผลยกเลิก") || "" })} disabled={submitting} variant="danger">
-                  <Trash2 className="w-3.5 h-3.5" /> ยกเลิก
+                  ยกเลิก
+                </BulkBtn>
+              )}
+              {canCompute && (
+                <BulkBtn onClick={deleteSelectedSlips} disabled={submitting} variant="danger">
+                  <Trash2 className="w-3.5 h-3.5" /> ลบออกจากงวด
                 </BulkBtn>
               )}
             </div>
@@ -373,7 +399,19 @@ export default function PayrollPeriodDetailPage() {
                   </option>
                 ))}
               </select>
-              {(slipQuery || slipStatusFilter) && (
+              <select
+                value={slipDeptFilter}
+                onChange={(e) => { setSlipDeptFilter(e.target.value); setSelectedSlips([]); }}
+                className="px-3 py-2 border border-border rounded-lg text-sm"
+              >
+                <option value="">ทุกแผนก</option>
+                {slipDepartments.map((d) => (
+                  <option key={d.key} value={d.key}>
+                    {d.name} ({d.count})
+                  </option>
+                ))}
+              </select>
+              {(slipQuery || slipStatusFilter || slipDeptFilter) && (
                 <span className="text-xs text-muted">
                   พบ {filteredSlips.length} จาก {slips.length} คน
                 </span>
@@ -427,7 +465,10 @@ export default function PayrollPeriodDetailPage() {
                         <div className="font-medium">
                           {s.employee?.first_name} {s.employee?.last_name}{s.employee?.nickname ? ` (${s.employee.nickname})` : ""}
                         </div>
-                        <div className="text-xs text-muted font-mono">{s.employee?.employee_code}</div>
+                        <div className="text-xs text-muted">
+                          <span className="font-mono">{s.employee?.employee_code}</span>
+                          {s.employee?.department?.name && <span> · {s.employee.department.name}</span>}
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-right">{fmtMoney(s.base_pay)}</td>
                       <td className="px-3 py-3 text-right">{fmtMoney(s.ot_pay)}</td>
